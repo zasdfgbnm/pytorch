@@ -5834,6 +5834,23 @@ a")
 
         self.assertExpected(cu.__getattr__('foo').pretty_print_schema())
 
+    def test_parser_tuple_expression_type_annotations(self):
+        cu = torch.jit.CompilationUnit('''
+            def foo(x : Tensor, y : ((Tensor, Tensor), Tensor) -> (Tensor, Tensor):
+                return x, x
+        ''')
+
+        self.assertExpected(cu.__getattr__('foo').pretty_print_schema())
+
+    def test_parser_tuple_expression_type_annotations_comment(self):
+        cu = torch.jit.CompilationUnit('''
+            def foo(x, y):
+                # type: (Tensor, ((Tensor, Tensor), Tensor)) -> (Tensor, Tensor)
+                return x, x
+        ''')
+
+        self.assertExpected(cu.__getattr__('foo').pretty_print_schema())
+
     def test_parser_type_annotations_unknown_type(self):
         with self.assertRaisesRegex(RuntimeError, r'Unknown type name Foo'):
             cu = torch.jit.CompilationUnit('''

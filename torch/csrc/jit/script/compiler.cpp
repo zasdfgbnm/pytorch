@@ -1978,6 +1978,10 @@ TypePtr parseTypeFromExpr(Expr expr) {
         && select.selector().name() == "Tensor") {
       return ident_to_type_lut().at("Tensor");
     }
+  } else if (expr.kind() == TK_TUPLE_LITERAL) {
+    auto tuple = TupleLiteral(expr);
+    std::vector<TypePtr> types = fmap(tuple.inputs(), parseTypeFromExpr);
+    return TupleType(types);
   }
   throw ErrorReport(expr.range()) << "Expression of type " << kindToString(expr.kind())
                                   << " cannot be used in a type expression";
