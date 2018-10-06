@@ -7932,7 +7932,6 @@ EXCLUDE_SCRIPT = {
     'test_nn_pixel_shuffle',
     'test_nn_interpolate',
     'test_nn_pad',
-    'test_nn_cosine_similarity',
     'test_nn_normalize',
     'test_nn_fold',
     'test_nn_linear',
