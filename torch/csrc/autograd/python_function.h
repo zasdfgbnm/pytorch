@@ -8,15 +8,12 @@
 #include "torch/csrc/autograd/saved_variable.h"
 #include "torch/csrc/utils/object_ptr.h"
 
-#include <ATen/optional.h>
+#include "c10/util/Optional.h"
+#include "c10/DeviceGuard.h"
 
 #include <vector>
 #include <utility>
 #include <memory>
-
-namespace at {
-struct DeviceGuard;
-} // namespace at
 
 namespace torch { namespace jit { struct Graph; }}
 namespace torch { namespace autograd {
@@ -24,10 +21,10 @@ namespace torch { namespace autograd {
 struct VariableInfo {
   explicit VariableInfo(const Variable& var);
 
-  Variable zeros(at::DeviceGuard& device_guard) const;
+  Variable zeros(at::OptionalDeviceGuard& device_guard) const;
 
   at::Type* type;
-  int32_t device = -1;
+  at::Device device = at::kCPU;
   std::vector<int64_t> size;
   bool requires_grad;
 };
@@ -37,7 +34,7 @@ struct VariableInfo {
 struct PyFunction : public Function {
   PyFunction(PyObject* obj) : obj(obj) {}
 
-  virtual variable_list apply(const variable_list& inputs) override;
+  virtual variable_list apply(variable_list&& inputs) override;
   variable_list legacy_apply(const variable_list& inputs);
 
   virtual void release_variables() override;
@@ -90,7 +87,6 @@ struct THPFunction {
     // For each input, true if the input is a THPVariable
     std::vector<bool> is_variable_input;
     char has_freed_buffers;
-    char is_traced;
 
     // The C++ wrapper for this Python function.
     // See a comment in THPFunction_asFunction for details about this field.

@@ -1,14 +1,21 @@
 set(LIB_SOURCES
-        TensorTypeId.cpp
-        TensorTypeIdRegistration.cpp
+        DeviceId.cpp
+        Dispatcher.cpp
+        DispatchKey.cpp
+        DispatchTable.cpp
+        KernelRegistration.cpp
+        LayoutId.cpp
+        OpSchema.cpp
+        OpSchemaRegistration.cpp
 )
 
 set(TEST_SOURCES
-        dummy_test.cpp
+        OpSchema_test.cpp
 )
 
 add_library(dispatch OBJECT ${LIB_SOURCES})
 target_enable_style_warnings(dispatch)
+add_dependencies(dispatch Caffe2_PROTO)
 
 if(BUILD_TEST)
     add_executable(dispatch_test ${TEST_SOURCES} $<TARGET_OBJECTS:dispatch>)

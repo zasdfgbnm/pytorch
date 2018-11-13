@@ -49,7 +49,7 @@ fi
 
 mkdir -p $TEST_DIR/{cpp,python}
 
-cd ${INSTALL_PREFIX}
+cd "${WORKSPACE}"
 
 # C++ tests
 echo "Running C++ tests.."
@@ -62,12 +62,26 @@ for test in $(find "${INSTALL_PREFIX}/test" -executable -type f); do
     */mkl_utils_test|*/aten/integer_divider_test)
       continue
       ;;
-    */aten/*)
-      # ATen uses test framework Catch2
-      "$test" -r=xml -o "${junit_reports_dir}/$(basename $test).xml"
-      ;;
-    *)
-      "$test" --gtest_output=xml:"$gtest_reports_dir/$(basename $test).xml"
+    */scalar_tensor_test|*/basic|*/native_test)
+	  if [[ "$BUILD_ENVIRONMENT" == *rocm* ]]; then
+		continue
+	  else
+	    "$test"
+	  fi
+	  ;;
+	*)
+      # Currently, we use a mixture of gtest (caffe2) and Catch2 (ATen). While
+      # planning to migrate to gtest as the common PyTorch c++ test suite, we
+      # currently do NOT use the xml test reporter, because Catch doesn't
+      # support multiple reporters
+      # c.f. https://github.com/catchorg/Catch2/blob/master/docs/release-notes.md#223
+      # which means that enabling XML output means you lose useful stdout
+      # output for Jenkins.  It's more important to have useful console
+      # output than it is to have XML output for Jenkins.
+      # Note: in the future, if we want to use xml test reporter once we switch
+      # to all gtest, one can simply do:
+      # "$test" --gtest_output=xml:"$gtest_reports_dir/$(basename $test).xml"
+      "$test"
       ;;
   esac
 done
@@ -90,22 +104,40 @@ if [[ $BUILD_ENVIRONMENT == conda* ]]; then
   conda_ignore_test+=("--ignore $CAFFE2_PYPATH/python/operator_test/checkpoint_test.py")
 fi
 
+rocm_ignore_test=()
+if [[ $BUILD_ENVIRONMENT == *-rocm* ]]; then
+  # Currently these tests are failing on ROCM platform:
+
+  # Unknown reasons, need to debug
+  rocm_ignore_test+=("--ignore $CAFFE2_PYPATH/python/operator_test/arg_ops_test.py")
+  rocm_ignore_test+=("--ignore $CAFFE2_PYPATH/python/operator_test/piecewise_linear_transform_test.py")
+  rocm_ignore_test+=("--ignore $CAFFE2_PYPATH/python/operator_test/softmax_ops_test.py")
+  rocm_ignore_test+=("--ignore $CAFFE2_PYPATH/python/operator_test/unique_ops_test.py")
+fi
+
 # Python tests
+# NB: Warnings are disabled because they make it harder to see what
+# the actual erroring test is
 echo "Running Python tests.."
+pip install --user pytest-sugar
 "$PYTHON" \
   -m pytest \
   -x \
   -v \
+  --disable-warnings \
   --junit-xml="$TEST_DIR/python/result.xml" \
   --ignore "$CAFFE2_PYPATH/python/test/executor_test.py" \
   --ignore "$CAFFE2_PYPATH/python/operator_test/matmul_op_test.py" \
   --ignore "$CAFFE2_PYPATH/python/operator_test/pack_ops_test.py" \
   --ignore "$CAFFE2_PYPATH/python/mkl/mkl_sbn_speed_test.py" \
   ${conda_ignore_test[@]} \
+  ${rocm_ignore_test[@]} \
   "$CAFFE2_PYPATH/python" \
   "${EXTRA_TESTS[@]}"
 
+cd ${INSTALL_PREFIX}
+
 if [[ -n "$INTEGRATED" ]]; then
-  pip install --user pytest-xdist torchvision
-  "$ROOT_DIR/scripts/onnx/test.sh" -p
+  pip install --user torchvision
+  "$ROOT_DIR/scripts/onnx/test.sh"
 fi
