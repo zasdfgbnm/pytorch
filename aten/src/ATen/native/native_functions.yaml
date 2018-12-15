@@ -182,28 +182,17 @@
 # (so that it can be traced directly).
 - func: _dim_arange(Tensor like, int64_t dim) -> Tensor
 
-# `argmin` and `argmax` are exposed in C++ but not in Python, where we only
-# expose `_argmin` and `_argmax` (which call the first versions). In Python, we
-# then define our own `argmax` and `argmin` that handle passing `dim=None`,
-# which gets the argmax/argmin of the flattened array.
-
 - func: argmax(Tensor self, int64_t dim, bool keepdim=false) -> Tensor
   variants: function, method
 
 - func: argmax(Tensor self) -> Tensor
   variants: function, method
 
-- func: _argmax(Tensor self, int64_t dim, bool keepdim=false) -> Tensor
-  variants: function
-
 - func: argmin(Tensor self, int64_t dim, bool keepdim=false) -> Tensor
   variants: function, method
 
 - func: argmin(Tensor self) -> Tensor
   variants: function, method
-
-- func: _argmin(Tensor self, int64_t dim, bool keepdim=false) -> Tensor
-  variants: function
 
 - func: as_strided(Tensor self, IntList size, IntList stride) -> Tensor
   variants: function, method
