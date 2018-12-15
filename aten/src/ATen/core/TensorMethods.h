@@ -103,17 +103,11 @@ inline bool Tensor::allclose(const Tensor & other, double rtol, double atol, boo
 inline Tensor Tensor::any(int64_t dim, bool keepdim) const {
     return type().any(*this, dim, keepdim);
 }
-inline Tensor Tensor::argmax(int64_t dim, bool keepdim) const {
+inline Tensor Tensor::argmax(c10::optional<int64_t> dim, bool keepdim) const {
     return type().argmax(*this, dim, keepdim);
 }
-inline Tensor Tensor::argmax() const {
-    return type().argmax(*this);
-}
-inline Tensor Tensor::argmin(int64_t dim, bool keepdim) const {
+inline Tensor Tensor::argmin(c10::optional<int64_t> dim, bool keepdim) const {
     return type().argmin(*this, dim, keepdim);
-}
-inline Tensor Tensor::argmin() const {
-    return type().argmin(*this);
 }
 inline Tensor Tensor::as_strided(IntList size, IntList stride) const {
     return type().as_strided(*this, size, stride);

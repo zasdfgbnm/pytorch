@@ -182,16 +182,10 @@
 # (so that it can be traced directly).
 - func: _dim_arange(Tensor like, int64_t dim) -> Tensor
 
-- func: argmax(Tensor self, int64_t dim, bool keepdim=false) -> Tensor
+- func: argmax(Tensor self, int64_t? dim=None, bool keepdim=false) -> Tensor
   variants: function, method
 
-- func: argmax(Tensor self) -> Tensor
-  variants: function, method
-
-- func: argmin(Tensor self, int64_t dim, bool keepdim=false) -> Tensor
-  variants: function, method
-
-- func: argmin(Tensor self) -> Tensor
+- func: argmin(Tensor self, int64_t? dim=None, bool keepdim=false) -> Tensor
   variants: function, method
 
 - func: as_strided(Tensor self, IntList size, IntList stride) -> Tensor
