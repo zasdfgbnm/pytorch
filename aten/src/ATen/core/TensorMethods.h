@@ -625,6 +625,12 @@ inline Tensor Tensor::t() const {
 inline Tensor & Tensor::t_() {
     return type().t_(*this);
 }
+inline Tensor Tensor::t(int64_t dim0, int64_t dim1) const {
+    return type().t(*this, dim0, dim1);
+}
+inline Tensor & Tensor::t_(int64_t dim0, int64_t dim1) {
+    return type().t_(*this, dim0, dim1);
+}
 inline Tensor Tensor::tan() const {
     return type().tan(*this);
 }

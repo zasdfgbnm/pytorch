@@ -468,6 +468,8 @@ public:
   Tensor prod(int64_t dim, ScalarType dtype) const;
   Tensor t() const;
   Tensor & t_();
+  Tensor t(int64_t dim0, int64_t dim1) const;
+  Tensor & t_(int64_t dim0, int64_t dim1);
   Tensor tan() const;
   Tensor & tan_();
   Tensor tanh() const;

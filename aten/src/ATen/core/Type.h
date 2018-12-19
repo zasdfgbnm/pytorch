@@ -375,6 +375,8 @@ struct CAFFE2_API Type {
   virtual Tensor prod(const Tensor & self, int64_t dim, ScalarType dtype) const = 0;
   virtual Tensor t(const Tensor & self) const = 0;
   virtual Tensor & t_(Tensor & self) const = 0;
+  virtual Tensor t(const Tensor & self, int64_t dim0, int64_t dim1) const = 0;
+  virtual Tensor & t_(Tensor & self, int64_t dim0, int64_t dim1) const = 0;
   virtual Tensor tan(const Tensor & self) const = 0;
   virtual Tensor & tan_(Tensor & self) const = 0;
   virtual Tensor tanh(const Tensor & self) const = 0;
