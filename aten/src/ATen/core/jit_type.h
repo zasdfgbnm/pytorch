@@ -22,6 +22,7 @@ _(TensorType) \
 _(CompleteTensorType) \
 _(UndefinedTensorType) \
 _(TupleType) \
+_(NamedTupleType) \
 _(ListType) \
 _(DictType) \
 _(NumberType) \
@@ -631,11 +632,10 @@ private:
 
 struct TupleType;
 using TupleTypePtr = std::shared_ptr<TupleType>;
-using OptNameList = c10::optional<std::vector<std::string>>;
 // This type represents a Tuple
 struct CAFFE2_API TupleType : public Type {
-  static TupleTypePtr create(std::vector<TypePtr> types, OptNameList names=c10::nullopt) {
-    return TupleTypePtr(new TupleType(std::move(types), std::move(names))); // NOLINT(modernize-make-shared)
+  static TupleTypePtr create(std::vector<TypePtr> types) {
+    return TupleTypePtr(new TupleType(std::move(types))); // NOLINT(modernize-make-shared)
   }
   DEFINE_IS_SUBCLASS(TupleType);
   at::ArrayRef<TypePtr> elements() const {
@@ -644,25 +644,13 @@ struct CAFFE2_API TupleType : public Type {
   bool operator==(const Type& rhs) const override {
     return compare(rhs, [](const TypePtr a, const TypePtr b) {
       return *a == *b;
-    }) && names_ == rhs.expect<TupleType>()->names_;
-    // `compare` guarantees that rhs is always a TupleType, so the
-    // dynamic_cast above always success.
+    });
   }
   bool isSubtypeOf(const TypePtr rhs_) const override {
-    if (Type::isSubtypeOf(rhs_))
-      return true;
-    auto rhs = rhs_->cast<TupleType>();
-    if (!rhs)
-      return false;
-    // unnamed tuple is not a subtype of nametuple
-    if (!hasNames() && rhs->hasNames())
-      return false;
-    // namedtuple may be a subtype of unnamed tuple
-    bool names_match = !rhs->hasNames() || names() == rhs->names();
     // co-variant rules for tuples
     return names_match && compare(*rhs, [](const TypePtr a, const TypePtr b) {
       return a->isSubtypeOf(b);
-    });
+    }) || Type::isSubtypeOf(rhs);
   }
   bool requires_grad() const override {
     return std::any_of(elements_.begin(), elements_.end(),
@@ -705,6 +693,86 @@ struct CAFFE2_API TupleType : public Type {
   }
   TypePtr createWithContained(std::vector<TypePtr> contained_types) const override {
     return create(std::move(contained_types));
+  }
+
+  static const TypeKind Kind = TypeKind::TupleType;
+private:
+  TupleType(std::vector<TypePtr> elements_)
+  : Type(TypeKind::TupleType)
+  , elements_(std::move(elements_))) {
+    has_free_variables_ =
+        std::any_of(elements_.begin(), elements_.end(), [](TypePtr v) {
+          return v->hasFreeVariables();
+        });
+  }
+
+  bool compare(const Type& rhs, std::function<bool(const TypePtr, const TypePtr)> fn) const {
+    if(rhs.kind() != kind())
+      return false;
+    const auto & l_elements = elements();
+    const auto & r_elements = rhs.cast<TupleType>()->elements();
+    if(l_elements.size() != r_elements.size())
+      return false;
+    for(size_t i = 0; i < l_elements.size(); ++i) {
+      if(!fn(l_elements[i], r_elements[i]))
+        return false;
+    }
+    return true;
+  }
+
+  std::vector<TypePtr> elements_;
+  bool has_free_variables_;
+};
+
+struct NamedTupleType;
+using NamedTupleTypePtr = std::shared_ptr<NamedTupleType>;
+using OptNameList = c10::optional<std::vector<std::string>>;
+// This type represents a Tuple
+struct CAFFE2_API NamedTupleType : public TupleType {
+  static NamedTupleTypePtr create(std::vector<TypePtr> types, OptNameList names=c10::nullopt) {
+    return NamedTupleTypePtr(new NamedTupleType(std::move(types), std::move(names))); // NOLINT(modernize-make-shared)
+  }
+  DEFINE_IS_SUBCLASS(NamedTupleType);
+  bool isSubtypeOf(const TypePtr rhs_) const override {
+    if (Type::isSubtypeOf(rhs_))
+      return true;
+    auto rhs = rhs_->cast<TupleType>();
+    if (!rhs)
+      return false;
+    // unnamed tuple is not a subtype of nametuple
+    if (!hasNames() && rhs->hasNames())
+      return false;
+    // namedtuple may be a subtype of unnamed tuple
+    bool names_match = !rhs->hasNames() || names() == rhs->names();
+    // co-variant rules for tuples
+    return names_match && compare(*rhs, [](const TypePtr a, const TypePtr b) {
+      return a->isSubtypeOf(b);
+    });
+  }
+  std::string str() const override {
+    std::stringstream ss;
+    ss << "(";
+    for(size_t i = 0; i < elements().size(); ++i) {
+      if(i > 0)
+        ss << ", ";
+      ss << elements()[i]->str();
+    }
+    ss << ")";
+    return ss.str();
+  }
+  std::string python_str() const override {
+    std::stringstream ss;
+    ss << "Tuple[";
+    for(size_t i = 0; i < elements().size(); ++i) {
+      if(i > 0)
+        ss << ", ";
+      ss << elements()[i]->python_str();
+    }
+    ss << "]";
+    return ss.str();
+  }
+  const std::vector<std::string> &names() const {
+    return names_.value();
   }
 
   static const TypeKind Kind = TypeKind::TupleType;
