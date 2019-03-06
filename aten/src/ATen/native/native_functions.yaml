@@ -223,7 +223,10 @@
 - func: arange(Scalar end, *, Tensor(a!) out) -> Tensor(a!)
   matches_jit_signature: True
 
-- func: arange(Scalar start, Scalar end, Scalar step=1, *, Tensor(a!) out) -> Tensor(a!)
+- func: arange(Scalar start, Scalar end, *, Tensor(a!) out) -> Tensor(a!)
+  matches_jit_signature: True
+
+- func: arange(Scalar start, Scalar end, Scalar step, *, Tensor(a!) out) -> Tensor(a!)
   matches_jit_signature: True
   dispatch:
     CPU: arange_cpu_out

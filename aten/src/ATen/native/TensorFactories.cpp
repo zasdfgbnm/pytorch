@@ -58,10 +58,20 @@ const TypeExtendedInterface& getFactoryType(const TensorOptions& options) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ arange ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Tensor arange(Scalar end, const TensorOptions& options) {
+  std::cout << "options.has_dtype() " << options.has_dtype() << std::endl;
+  std::cout << "end.isIntegral() " << end.isIntegral() << std::endl;
+  if (!options.has_dtype() && end.isIntegral()) {
+    std::cout << "arange is int" << std::endl;
+    return native::arange(/*start=*/0, end, options.dtype(kLong));
+  }
+  std::cout << "arange is not int" << std::endl;
   return native::arange(/*start=*/0, end, options);
 }
 
 Tensor arange(Scalar start, Scalar end, const TensorOptions& options) {
+  if (!options.has_dtype() && end.isIntegral() && start.isIntegral()) {
+    return native::arange(start, end, /*step=*/1, options.dtype(kLong));
+  }
   return native::arange(start, end, /*step=*/1, options);
 }
 
@@ -70,7 +80,8 @@ Tensor arange(
     Scalar end,
     Scalar step,
     const TensorOptions& options) {
-  Tensor result = at::empty({0}, options);  // to be filled by arange_out
+  bool is_int = !options.has_dtype() && end.isIntegral() && start.isIntegral() && step.isIntegral();
+  Tensor result = at::empty({0}, is_int?options.dtype(kLong):options);  // to be filled by arange_out
   return at::arange_out(result, start, end, step);
 }
 

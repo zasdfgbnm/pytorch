@@ -61,28 +61,6 @@ static void check_out_type_matches(Tensor result,
   }
 }
 
-inline Tensor dispatch_arange(Scalar end, Tensor result) {
-  AutoNoGIL no_gil;
-  return at::arange_out(result, end);
-}
-
-inline Tensor dispatch_arange(Scalar end, const TensorOptions& options) {
-  maybe_initialize_cuda(options);
-  AutoNoGIL no_gil;
-  return torch::arange(end, options);
-}
-
-inline Tensor dispatch_arange(Scalar start, Scalar end, Scalar step, Tensor result) {
-  AutoNoGIL no_gil;
-  return at::arange_out(result, start, end, step);
-}
-
-inline Tensor dispatch_arange(Scalar start, Scalar end, Scalar step, const TensorOptions& options) {
-  maybe_initialize_cuda(options);
-  AutoNoGIL no_gil;
-  return torch::arange(start, end, step, options);
-}
-
 static inline bool allIntegral(std::initializer_list<std::reference_wrapper<Scalar>> l) {
   for (Scalar& s : l) {
     if (!s.isIntegral()) {
@@ -90,56 +68,6 @@ static inline bool allIntegral(std::initializer_list<std::reference_wrapper<Scal
     }
   }
   return true;
-}
-
-static PyObject * THPVariable_arange(PyObject* self, PyObject* args, PyObject* kwargs)
-{
-  HANDLE_TH_ERRORS
-  static PythonArgParser parser({
-    "arange(Scalar end, *, Tensor out=None, ScalarType dtype=None, Layout layout=torch.strided, Device device=None, bool requires_grad=False)",
-    "arange(Scalar start, Scalar end, Scalar step=1, *, Tensor out=None, ScalarType dtype=None, Layout layout=torch.strided, Device device=None, bool requires_grad=False)",
-  });
-
-  ParsedArgs<8> parsed_args;
-  auto r = parser.parse(args, kwargs, parsed_args);
-
-  if (r.idx == 0) {
-    if (r.isNone(1)) {
-      auto end = r.scalar(0);
-      // NOTE: r.scalartype(X) gives the default dtype if r.isNone(X)
-      auto scalarType = r.isNone(2) && allIntegral({end}) ? at::ScalarType::Long : r.scalartype(2);
-      const auto options = TensorOptions()
-          .dtype(scalarType)
-          .device(r.device(4))
-          .layout(r.layout(3).layout)
-          .requires_grad(r.toBool(5));
-      return wrap(dispatch_arange(end, options));
-    } else {
-      check_out_type_matches(r.tensor(1), r.scalartype(2), r.isNone(2), r.layout(3), r.isNone(3),
-                             r.device(4), r.isNone(4));
-      return wrap(dispatch_arange(r.scalar(0), r.tensor(1)).set_requires_grad(r.toBool(5)));
-    }
-  } else if (r.idx == 1) {
-    if (r.isNone(3)) {
-      auto start = r.scalar(0);
-      auto end = r.scalar(1);
-      auto step = r.scalar(2);
-      // NOTE: r.scalartype(X) gives the default dtype if r.isNone(X)
-      auto scalarType = r.isNone(4) && allIntegral({start, end, step}) ? at::ScalarType::Long : r.scalartype(4);
-      const auto options = TensorOptions()
-          .dtype(scalarType)
-          .device(r.device(6))
-          .layout(r.layout(5).layout)
-          .requires_grad(r.toBool(7));
-      return wrap(dispatch_arange(start, end, step, options));
-    } else {
-      check_out_type_matches(r.tensor(3), r.scalartype(4), r.isNone(4), r.layout(5), r.isNone(5),
-                               r.device(6), r.isNone(6));
-      return wrap(dispatch_arange(r.scalar(0), r.scalar(1), r.scalar(2), r.tensor(3)).set_requires_grad(r.toBool(7)));
-    }
-  }
-  Py_RETURN_NONE;
-  END_HANDLE_TH_ERRORS
 }
 
 inline Tensor dispatch_range(Scalar start, Scalar end, Scalar step, Tensor result) {
@@ -390,7 +318,6 @@ static PyObject * THPVariable_get_device(PyObject* self_, PyObject* args, PyObje
 ${py_methods}
 
 static PyMethodDef torch_functions[] = {
-  {"arange", (PyCFunction)THPVariable_arange, METH_VARARGS | METH_KEYWORDS | METH_STATIC, NULL},
   {"as_tensor", (PyCFunction)THPVariable_as_tensor, METH_VARARGS | METH_KEYWORDS | METH_STATIC, NULL},
   {"dsmm", (PyCFunction)THPVariable_mm, METH_VARARGS | METH_KEYWORDS | METH_STATIC, NULL},
   {"from_numpy", (PyCFunction)THPVariable_from_numpy, METH_STATIC | METH_O, NULL},

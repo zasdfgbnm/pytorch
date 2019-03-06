@@ -222,7 +222,9 @@ inline at::Tensor PythonArgs::tensor(int i) {
 }
 
 inline at::Scalar PythonArgs::scalar(int i) {
-  return scalarWithDefault(i, signature.params[i].default_scalar);
+  auto r = scalarWithDefault(i, signature.params[i].default_scalar);
+  std::cout << "scalar dtype @" << i << " is integral: " << r.isIntegral() << std::endl;
+  return r;
 }
 
 inline at::Scalar PythonArgs::scalarWithDefault(int i, at::Scalar default_scalar) {
@@ -233,6 +235,7 @@ inline at::Scalar PythonArgs::scalarWithDefault(int i, at::Scalar default_scalar
     return ((THPVariable*)args[i])->cdata.item();
   }
   if (THPUtils_checkLong(args[i])) {
+    std::cout << "long check succeed" << std::endl;
     return at::Scalar(static_cast<int64_t>(THPUtils_unpackLong(args[i])));
   }
 
