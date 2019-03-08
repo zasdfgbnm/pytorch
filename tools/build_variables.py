@@ -161,7 +161,6 @@ def add_torch_libs():
             "-DUSE_NCCL",
             "-DUSE_NUMPY",
             "-DUSE_SCALARS",
-            "-DTH_INDEX_BASE=0",
             "-DNO_CUDNN_DESTROY_HANDLE",
             "-DPYTORCH_ONNX_CAFFE2_BUNDLE",
             "-Wno-write-strings",
@@ -225,6 +224,7 @@ def add_torch_libs():
             "//caffe2/aten:ATen",
             "//caffe2/aten:generated-aten-headers-cuda",
             "//caffe2/caffe2:caffe2_cpu",
+            "//caffe2/caffe2:caffe2_gpu",
             "//caffe2/torch/lib/libshm:libshm",
         ],
         external_deps=[
