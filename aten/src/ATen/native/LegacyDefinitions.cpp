@@ -62,18 +62,6 @@ Tensor & index_fill_(Tensor& self, int64_t dim, const Tensor & index, const Tens
   return at::legacy::th::_th_index_fill_(self, dim, index, value);
 }
 
-Tensor & scatter_(Tensor& self, int64_t dim, const Tensor & index, const Tensor & src) {
-  return at::legacy::th::_th_scatter_(self, dim, index, src);
-}
-
-Tensor & scatter_(Tensor& self, int64_t dim, const Tensor & index, Scalar value) {
-  return at::legacy::th::_th_scatter_(self, dim, index, value);
-}
-
-Tensor & scatter_add_(Tensor& self, int64_t dim, const Tensor & index, const Tensor & src) {
-  return at::legacy::th::_th_scatter_add_(self, dim, index, src);
-}
-
 Tensor & lt_(Tensor& self, Scalar other) {
   return at::legacy::th::_th_lt_(self, other);
 }
@@ -390,14 +378,6 @@ Tensor & nonzero_out(Tensor & result, const Tensor & self) {
 
 Tensor nonzero(const Tensor & self) {
   return at::legacy::th::_th_nonzero(self);
-}
-
-Tensor & gather_out(Tensor & result, const Tensor & self, int64_t dim, const Tensor & index, bool sparse_grad) {
-  return at::legacy::th::_th_gather_out(result, self, dim, index);
-}
-
-Tensor gather(const Tensor & self, int64_t dim, const Tensor & index, bool sparse_grad) {
-  return at::legacy::th::_th_gather(self, dim, index);
 }
 
 Tensor & addcmul_out(Tensor & result, const Tensor & self, const Tensor & tensor1, const Tensor & tensor2, Scalar value) {

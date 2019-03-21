@@ -7267,6 +7267,62 @@ class _TestTorchMixin(object):
     def test_scatterFill(self):
         self._test_scatter_base(self, lambda t: t, 'scatter_', True)
 
+    def test_scatter_gather_scalar(self):
+        a = torch.tensor(123)
+        a_ = torch.tensor([123])
+        b = torch.tensor(0)
+        b_ = torch.tensor([0])
+
+        self.assertEqual(a.gather(0, b), a)
+        self.assertEqual(a.gather(0, b_), a_)
+        self.assertEqual(a_.gather(0, b), a_)
+        self.assertEqual(a_.gather(0, b_), a_)
+
+        self.assertEqual(torch.tensor(0).scatter_(0, b, a), a)
+        self.assertEqual(torch.tensor(0).scatter_(0, b_, a), a)
+        self.assertEqual(torch.tensor(0).scatter_(0, b, a_), a)
+        self.assertEqual(torch.tensor(0).scatter_(0, b_, a_), a)
+        self.assertEqual(torch.tensor([0]).scatter_(0, b, a), a_)
+        self.assertEqual(torch.tensor([0]).scatter_(0, b_, a), a_)
+        self.assertEqual(torch.tensor([0]).scatter_(0, b, a_), a_)
+        self.assertEqual(torch.tensor([0]).scatter_(0, b_, a_), a_)
+
+        self.assertEqual(torch.tensor(0).scatter_add_(0, b, a), a)
+        self.assertEqual(torch.tensor(0).scatter_add_(0, b_, a), a)
+        self.assertEqual(torch.tensor(0).scatter_add_(0, b, a_), a)
+        self.assertEqual(torch.tensor(0).scatter_add_(0, b_, a_), a)
+        self.assertEqual(torch.tensor([0]).scatter_add_(0, b, a), a_)
+        self.assertEqual(torch.tensor([0]).scatter_add_(0, b_, a), a_)
+        self.assertEqual(torch.tensor([0]).scatter_add_(0, b, a_), a_)
+        self.assertEqual(torch.tensor([0]).scatter_add_(0, b_, a_), a_)
+
+    def test_gather_broadcast(self):
+        x = torch.randn(4, 5, 6, 1)
+        i1 = torch.randint(5, (1, 2, 6, 7), dtype=torch.long)
+        i2 = i1.squeeze()
+        i_expand = i1.expand(4, 2, 6, 7)
+        x_expand = x.expand(4, 5, 6, 7)
+        expected = x_expand.gather(1, i_expand)
+        self.assertEqual(x.gather(1, i1), expected)
+        self.assertEqual(x.gather(1, i2), expected)
+        self.assertEqual(x.gather(1, i_expand), expected)
+        self.assertEqual(x_expand.gather(1, i1), expected)
+        self.assertEqual(x_expand.gather(1, i2), expected)
+
+    def test_scatter_broadcast(self):
+        x = torch.randn(4, 2, 6, 1)
+        y = torch.empty(4, 5, 6, 7)
+        i1 = torch.randint(5, (1, 2, 6, 7), dtype=torch.long)
+        i2 = i1.squeeze()
+        i_expand = i1.expand(4, 2, 6, 7)
+        x_expand = x.expand(4, 2, 6, 7)
+        expected = y.clone().scatter_(1, i_expand, x_expand)
+        self.assertEqual(y.scatter_(1, i1, x), expected)
+        self.assertEqual(y.scatter_(1, i2, x), expected)
+        self.assertEqual(y.scatter_(1, i_expand, x), expected)
+        self.assertEqual(y.scatter_(1, i1, x_expand), expected)
+        self.assertEqual(y.scatter_(1, i2, x_expand), expected)
+
     def test_masked_scatter(self):
         num_copy, num_dest = 3, 10
         dest = torch.randn(num_dest)
