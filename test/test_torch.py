@@ -10627,14 +10627,30 @@ tensor([[[1., 1., 1.,  ..., 1., 1., 1.],
             expected_inverse = torch.tensor([0, 1, 2, 1, 4, 3, 1, 2], device=device)
             expected_counts = torch.tensor([1, 3, 2, 1, 1], device=device)
 
-            x_unique = torch.unique(x)
-            self.assertEqual(
-                expected_unique.tolist(), sorted(x_unique.tolist()))
+            def test_func_and_method(x, output_expect, *other_expect, **kwargs):
+                # test function
+                ret = torch.unique(x, **kwargs)
+                output = ret[0]
+                other = ret[1:]
+                sort_idx = torch.arange(output.numel(), device=x.device)
+                if 'sorted' in kwargs and kwargs['sorted']:
+                    output, sort_idx = output.sort()
+                self.assertEqual(output, output_expect)
+                for x, y in zip(other, other_expect):
+                    self.assertEqual(x[sort_idx], y)
+                # test method
+                ret = x.unique(**kwargs)
+                output = ret[0]
+                other = ret[1:]
+                sort_idx = torch.arange(output.numel(), device=x.device)
+                if 'sorted' in kwargs and kwargs['sorted']:
+                    output, sort_idx = output.sort()
+                self.assertEqual(output, output_expect)
+                for x, y in zip(other, other_expect):
+                    self.assertEqual(x[sort_idx], y)
 
-            x_unique, x_inverse = x.unique(return_inverse=True)
-            self.assertEqual(
-                expected_unique.tolist(), sorted(x_unique.tolist()))
-            self.assertEqual(expected_inverse.numel(), x_inverse.numel())
+            test_func_and_method(x, expected_unique)
+            test_func_and_method(x, expected_unique, expected_inverse, return_inverse=True)
 
             x_unique = x.unique(sorted=True)
             self.assertEqual(expected_unique, x_unique)
