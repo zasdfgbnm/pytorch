@@ -10653,41 +10653,41 @@ tensor([[[1., 1., 1.,  ..., 1., 1., 1.],
                 output = ret[0]
                 other = ret[1:]
                 sort_idx = torch.arange(output.numel(), device=x.device)
-                if 'sorted' in kwargs and kwargs['sorted']:
-                    output, sort_idx = output.sort()
+                sorted = 'sorted' not in kwargs or kwargs['sorted']
+                if not sorted:
+                    output = output.sort()
+                else:
+                    for x, y in zip(other, other_expect):
+                        self.assertEqual(x[sort_idx], y)
                 self.assertEqual(output, output_expect)
-                for x, y in zip(other, other_expect):
-                    self.assertEqual(x[sort_idx], y)
                 # test method
                 ret = x.unique(**kwargs)
                 output = ret[0]
                 other = ret[1:]
                 sort_idx = torch.arange(output.numel(), device=x.device)
-                if 'sorted' in kwargs and kwargs['sorted']:
+                if 'sorted' in kwargs and not kwargs['sorted']:
                     output, sort_idx = output.sort()
                 self.assertEqual(output, output_expect)
                 for x, y in zip(other, other_expect):
                     self.assertEqual(x[sort_idx], y)
 
-            test_func_and_method(x, expected_unique)
-            test_func_and_method(x, expected_unique, expected_inverse, return_inverse=True)
+            def test_all_combinations(x, expected_unique, expected_inverse, expected_counts):
+                for sorted, return_inverse, return_counts in itertools.product([True, False, None], repeat=3):
+                    kwargs = {}
+                    if sorted is not None:
+                        kwargs['sorted'] = sorted
+                    if return_inverse is not None:
+                        kwargs['return_inverse'] = return_inverse
+                    if return_counts is not None:
+                        kwargs['return_counts'] = return_counts
+                    other_expect = []
+                    if return_inverse:
+                        other_expect.append(expected_inverse)
+                    if return_counts:
+                        other_expect.append(expected_counts)
+                    test_func_and_method(x, expected_unique, *other_expect, **kwargs)
 
-            x_unique = x.unique(sorted=True)
-            self.assertEqual(expected_unique, x_unique)
-
-            x_unique, x_counts = torch.unique(x, sorted=True, return_counts=True)
-            self.assertEqual(expected_counts, x_counts)
-
-            x_unique, x_inverse = torch.unique(
-                x, sorted=True, return_inverse=True)
-            self.assertEqual(expected_unique, x_unique)
-            self.assertEqual(expected_inverse, x_inverse)
-
-            x_unique, x_inverse, x_counts = torch.unique(
-                x, sorted=True, return_inverse=True, return_counts=True)
-            self.assertEqual(expected_unique, x_unique)
-            self.assertEqual(expected_inverse, x_inverse)
-            self.assertEqual(expected_counts, x_counts)
+            test_all_combinations(x, expected_unique, expected_inverse, expected_counts)
 
             # Tests per-element unique on a higher rank tensor.
             y = x.view(2, 2, 2)
