@@ -1,103 +1,51 @@
-#include <ATen/NativeFunctions.h>
-
-#include <array>
-#include <functional>
-#include <numeric>
-#include <tuple>
-#include <vector>
-
 #include <ATen/ATen.h>
-#include <ATen/AccumulateType.h>
-#include <ATen/CPUApplyUtils.h>
-#include <ATen/Config.h>
-#include <ATen/Parallel.h>
 #include <ATen/native/cpu/layer_norm_kernel.h>
 
 namespace at {
 namespace native {
 
-std::tuple<Tensor, Tensor, Tensor> layer_norm_cpu(
-    const Tensor& X,
-    const Tensor& gamma /* optional */,
-    const Tensor& beta /* optional */,
+std::tuple<Tensor, Tensor, Tensor> native_layer_norm_cpu(
+    const Tensor& input,
+    const Tensor& weight /* optional */,
+    const Tensor& bias /* optional */,
+    int64_t normalized_ndim,
     int64_t M,
     int64_t N,
-    double eps) {
-  Tensor Y = at::native::empty_like(X);
-  Tensor mean = at::empty({M}, X.options());
-  Tensor rstd = at::empty({M}, X.options());
-  LayerNormKernel(kCPU, X, gamma, beta, M, N, eps, &Y, &mean, &rstd);
-  return std::make_tuple(Y, mean, rstd);
+    double eps)
+{
+  Tensor out = at::empty_like(input);
+  Tensor mean = at::empty({M}, input.options());
+  Tensor rstd = at::empty({M}, input.options());
+  LayerNormKernel(kCPU, input, weight, bias, M, N, eps, &out, &mean, &rstd);
+  return std::make_tuple(out, mean, rstd);
 }
 
-std::tuple<Tensor, Tensor, Tensor> layer_norm_backward_cpu(
-    const Tensor& dY,
-    const Tensor& X,
+std::tuple<Tensor, Tensor, Tensor> non_differentiable_native_layer_norm_backward_cpu(
+    const Tensor& input,
     const Tensor& mean,
     const Tensor& rstd,
-    const Tensor& gamma,
+    const Tensor& grad_out,
+    const Tensor& weight,
     int64_t M,
     int64_t N,
-    std::array<bool, 3> grad_input_mask) {
-  Tensor dX;
-  Tensor dgamma;
-  Tensor dbeta;
+    double eps,
+    std::array<bool, 3> grad_input_mask)
+{
+  Tensor grad_input;
+  Tensor grad_weight;
+  Tensor grad_bias;
   if (grad_input_mask[0]) {
-    dX = at::native::empty_like(X);
+    grad_input = at::native::empty_like(input);
   }
   if (grad_input_mask[1]) {
-    dgamma = at::native::empty_like(gamma);
+    grad_weight = at::native::empty_like(weight);
   }
   if (grad_input_mask[2]) {
-    dbeta = at::native::empty_like(gamma);
+    grad_bias = at::native::empty_like(weight);
   }
   LayerNormBackwardKernel(
-      kCPU, dY, X, mean, rstd, gamma, M, N, &dX, &dgamma, &dbeta);
-  return std::make_tuple(dX, dgamma, dbeta);
-}
-
-// TODO(yangxm): Change this function to Aten impl so that we can support higher
-// order gradients.
-std::tuple<Tensor, Tensor, Tensor> layer_norm_double_backward_cpu(
-    const Tensor& ddX,
-    const Tensor& ddgamma,
-    const Tensor& ddbeta,
-    const Tensor& dY,
-    const Tensor& X,
-    const Tensor& mean,
-    const Tensor& rstd,
-    const Tensor& gamma,
-    int64_t M,
-    int64_t N,
-    std::array<bool, 3> grad_input_mask) {
-  Tensor ddY;
-  Tensor dX;
-  Tensor dgamma;
-  if (grad_input_mask[0]) {
-    ddY = at::native::empty_like(dY);
-  }
-  if (grad_input_mask[1]) {
-    dX = at::native::empty_like(X);
-  }
-  if (grad_input_mask[2]) {
-    dgamma = at::native::empty_like(gamma);
-  }
-  LayerNormDoubleBackwardKernel(
-      kCPU,
-      ddX,
-      ddgamma,
-      ddbeta,
-      dY,
-      X,
-      mean,
-      rstd,
-      gamma,
-      M,
-      N,
-      &ddY,
-      &dX,
-      &dgamma);
-  return std::make_tuple(ddY, dX, dgamma);
+      kCPU, grad_out, input, mean, rstd, weight, M, N, &grad_input, &grad_weight, &grad_bias);
+  return std::make_tuple(grad_input, grad_weight, grad_bias);
 }
 
 Tensor layer_norm(
@@ -105,8 +53,8 @@ Tensor layer_norm(
     IntArrayRef normalized_shape,
     const Tensor& weight /* optional */,
     const Tensor& bias /* optional */,
-    double eps,
-    bool cudnn_enabled) {
+    double eps)
+{
   const int normalized_ndim = normalized_shape.size();
   TORCH_CHECK(
       normalized_ndim >= 1,
@@ -156,31 +104,11 @@ Tensor layer_norm(
       1LL,
       std::multiplies<int64_t>());
 
-  if (input.device().is_cpu()) {
-    return std::get<0>(native_layer_norm(
-        input.contiguous(), weight.contiguous(), bias.contiguous(), M, N, eps));
-  }
-
-  // Apply layer norm
-  auto input_reshaped = input.contiguous().view({1, M, -1});
-  auto out = at::batch_norm(
-      input_reshaped, {}, {}, {}, {}, true, 0, eps, cudnn_enabled);
-  out = out.view(input_shape);
-
-  if (weight.defined() && bias.defined()) {
-    return bias.addcmul(out, weight, 1);
-  } else if (weight.defined()) {
-    return out.mul(weight);
-  } else if (bias.defined()) {
-    return out.add(bias);
-  } else {
-    return out;
-  }
+  return std::get<0>(at::native_layer_norm(input.contiguous(), weight.contiguous(), bias.contiguous(), normalized_ndim, M, N, eps));
 }
 
 DEFINE_DISPATCH(LayerNormKernel);
 DEFINE_DISPATCH(LayerNormBackwardKernel);
-DEFINE_DISPATCH(LayerNormDoubleBackwardKernel);
 
 } // namespace native
 } // namespace at
