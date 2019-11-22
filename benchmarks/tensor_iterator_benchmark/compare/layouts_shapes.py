@@ -4,7 +4,7 @@ import factories
 # all sizes are in power of 2
 max_size = 26
 sizes_full = range(max_size + 1)
-sizes_small = [1, 10, 20, max_size]
+sizes_small = [1, 10, max_size]
 
 layouts_full = [
     ("contiguous",),
@@ -46,7 +46,7 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
     countiguous_dims = 0
     non_contiguous_dims = 0
     for i in layout:
-        if i == 'countiguous':
+        if i == 'contiguous':
             countiguous_dims += 1
         else:
             assert i == 'non_contiguous'
@@ -57,7 +57,7 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         problem_size = contiguous_size
         factory = factories.trivial_1d
         shape = split_size(contiguous_size, countiguous_dims)
-    if countiguous_dims == 0:
+    elif countiguous_dims == 0:
         assert non_contiguous_dims > 0
         name = f"all non-contiguous {countiguous_dims}d"
         problem_size = non_contiguous_size
@@ -65,6 +65,7 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         shape = split_size(non_contiguous_size, non_contiguous_dims)
     else:
         assert countiguous_dims == 1
+        assert non_contiguous_dims > 0
         assert layout[0] == 'contiguous'
         name = f"contiguous 1d and non-contiguous {non_contiguous_dims}d"
         problem_size = (contiguous_size, non_contiguous_size)
@@ -94,3 +95,6 @@ def combine_layouts_and_shapes(layouts, sizes):
 
 full = combine_layouts_and_shapes(layouts_full, sizes_full)
 small = combine_layouts_and_shapes(layouts_small, sizes_small)
+
+print(len(full))
+print(len(small))
