@@ -95,6 +95,3 @@ def combine_layouts_and_shapes(layouts, sizes):
 
 full = combine_layouts_and_shapes(layouts_full, sizes_full)
 small = combine_layouts_and_shapes(layouts_small, sizes_small)
-
-print(len(full))
-print(len(small))
