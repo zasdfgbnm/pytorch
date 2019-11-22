@@ -32,6 +32,9 @@ class LayoutShape(NamedTuple):
     factory: callable
     shape: Tuple
 
+    def new(self, dtype=None, device=None):
+        return self.factory(self.shape, dtype, device)
+
 
 def split_size(size, dims):
     s1 = size // dims
@@ -67,6 +70,7 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         problem_size = (contiguous_size, non_contiguous_size)
         factory = factories.contiguous_last_dim
         shape = split_size(non_contiguous_size, non_contiguous_dims) + (contiguous_size,)
+    shape = tuple(2 ** x for x in shape)
     return LayoutShape(name, problem_size, factory, shape)
 
 
