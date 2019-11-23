@@ -1,6 +1,5 @@
 import torch
 
-
 padding = 1
 
 def trivial_1d(shape, dtype=None, device=None):
