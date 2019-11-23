@@ -3,7 +3,7 @@ from . import factories
 from collections import defaultdict
 
 # all sizes are in power of 2
-max_size = 25
+max_size = 20
 sizes_full = range(max_size + 1)
 sizes_small = [1, 10, max_size]
 

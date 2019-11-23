@@ -23,7 +23,6 @@ def compare_problem_sizes():
         for op in with_inplace:
             for dtype in selected_dtypes:
                 for name, factories in layout_shape.full.items():
-                    print('Benchmarking', op, 'with dtype', dtype, 'and layout', name)
 
                     def setup(device):
                         return {
@@ -35,6 +34,7 @@ def compare_problem_sizes():
 
                     # benchmark cpu
                     if dtype is not torch.float16:
+                        print('Benchmarking', op, 'with dtype', dtype, 'and layout', name, 'on cpu')
                         data = []
                         for factory in factories:
                             tensor = factory.new(dtype, 'cpu')
@@ -45,6 +45,7 @@ def compare_problem_sizes():
                         yield (title, {'setup': setup('cpu'), 'data': data})
 
                     # benchmark cuda
+                    print('Benchmarking', op, 'with dtype', dtype, 'and layout', name, 'on cuda')
                     data = []
                     for factory in factories:
                         tensor = factory.new(dtype, 'cuda')
