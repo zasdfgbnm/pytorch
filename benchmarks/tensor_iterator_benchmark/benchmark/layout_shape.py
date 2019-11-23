@@ -3,26 +3,22 @@ from . import factories
 from collections import defaultdict
 
 # all sizes are in power of 2
-max_size = 20
+max_size = 15
 sizes_full = range(max_size + 1)
 sizes_small = [1, 10, max_size]
 
 layouts_full = [
     ("contiguous",),
     ("contiguous", "contiguous", "contiguous"),
-    ("contiguous", "contiguous", "contiguous", "contiguous", "contiguous"),
     ("non_contiguous",),
     ("non_contiguous", "non_contiguous", "non_contiguous"),
-    ("non_contiguous", "non_contiguous", "non_contiguous", "non_contiguous", "non_contiguous"),
     ("contiguous", "non_contiguous"),
     ("contiguous", "non_contiguous", "non_contiguous", "non_contiguous"),
-    ("contiguous", "non_contiguous", "non_contiguous", "non_contiguous", "non_contiguous", "non_contiguous"),
 ]
 
 layouts_small = [
     ("contiguous",),
     ("non_contiguous", "non_contiguous", "non_contiguous"),
-    ("contiguous", "non_contiguous"),
     ("contiguous", "non_contiguous", "non_contiguous", "non_contiguous"),
 ]
 

@@ -1,4 +1,5 @@
 import torch
+import gc
 from . import layout_shape, timing
 
 
@@ -42,6 +43,8 @@ def compare_problem_sizes():
                             one_loop_timer = timing.time_one_loop(f)
                             result = timing.time_func(one_loop_timer)
                             data.append((factory.problem_size, result))
+                            del tensor, one_loop_timer, f
+                            gc.collect()
                         yield (title, {'setup': setup('cpu'), 'data': data})
 
                     # benchmark cuda
@@ -53,6 +56,8 @@ def compare_problem_sizes():
                         one_loop_timer = timing.time_one_loop_cuda(f)
                         result = timing.time_func(one_loop_timer)
                         data.append((factory.problem_size, result))
+                        del tensor, one_loop_timer, f
+                        gc.collect()
                     yield (title, {'setup': setup('cuda'), 'data': data})
 
 
