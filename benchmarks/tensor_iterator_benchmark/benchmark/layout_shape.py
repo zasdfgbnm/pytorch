@@ -1,8 +1,9 @@
 from typing import NamedTuple, Tuple, Union
-import factories
+from . import factories
+from collections import defaultdict
 
 # all sizes are in power of 2
-max_size = 26
+max_size = 25
 sizes_full = range(max_size + 1)
 sizes_small = [1, 10, max_size]
 
@@ -27,7 +28,6 @@ layouts_small = [
 
 
 class LayoutShape(NamedTuple):
-    name: str
     problem_size: Union[int, Tuple[int, int]]
     factory: callable
     shape: Tuple
@@ -59,7 +59,7 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         shape = split_size(contiguous_size, countiguous_dims)
     elif countiguous_dims == 0:
         assert non_contiguous_dims > 0
-        name = f"all non-contiguous {countiguous_dims}d"
+        name = f"all non-contiguous {non_contiguous_dims}d"
         problem_size = non_contiguous_size
         factory = factories.non_contiguous
         shape = split_size(non_contiguous_size, non_contiguous_dims)
@@ -72,24 +72,27 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         factory = factories.contiguous_last_dim
         shape = split_size(non_contiguous_size, non_contiguous_dims) + (contiguous_size,)
     shape = tuple(2 ** x for x in shape)
-    return LayoutShape(name, problem_size, factory, shape)
+    return name, LayoutShape(problem_size, factory, shape)
 
 
 def combine_layouts_and_shapes(layouts, sizes):
-    ret = []
+    ret = defaultdict(list)
     for layout in layouts:
         if set(layout) == {'contiguous'}:
             for size in sizes:
-                ret.append(make_layout_shape(layout, contiguous_size=size))
+                name, result = make_layout_shape(layout, contiguous_size=size)
+                ret[name].append(result)
         elif set(layout) == {'non_contiguous'}:
             for size in sizes:
-                ret.append(make_layout_shape(layout, non_contiguous_size=size))
+                name, result = make_layout_shape(layout, non_contiguous_size=size)
+                ret[name].append(result)
         else:
             assert set(layout) == {'contiguous', 'non_contiguous'}
             for size1 in sizes:
                 for size2 in sizes:
                     if size1 + size2 <= max_size:
-                        ret.append(make_layout_shape(layout, size1, size2))
+                        name, result = make_layout_shape(layout, size1, size2)
+                        ret[name].append(result)
     return ret
 
 
