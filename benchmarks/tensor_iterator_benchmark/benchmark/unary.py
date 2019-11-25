@@ -39,7 +39,7 @@ def compare_problem_sizes():
                         f = getattr(tensor, op)
                         one_loop_timer = timing.time_one_loop(f)
                         result = timing.time_func(one_loop_timer)
-                        data.append((factory.problem_size, result))
+                        data.append(({'problem_size': factory.problem_size, 'result': result}))
                         del tensor, one_loop_timer, f
                         gc.collect()
                     yield (title, {'setup': setup('cpu'), 'data': data})
@@ -52,7 +52,7 @@ def compare_problem_sizes():
                     f = getattr(tensor, op)
                     one_loop_timer = timing.time_one_loop_cuda(f)
                     result = timing.time_func(one_loop_timer)
-                    data.append((factory.problem_size, result))
+                    data.append(({'problem_size': factory.problem_size, 'result': result}))
                     del tensor, one_loop_timer, f
                     gc.collect()
                 yield (title, {'setup': setup('cuda'), 'data': data})

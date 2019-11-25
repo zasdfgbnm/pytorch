@@ -1,6 +1,9 @@
 import torch
-from .result import results
+import json
 from . import unary
+from collections import defaultdict
+
+results = defaultdict(list)
 
 def warm_up_cuda():
     a = torch.randn(100 * 1024 * 1024)
@@ -11,3 +14,7 @@ def run():
     warm_up_cuda()
     for title, result in unary.run():
         results[title].append(result)
+
+def dump(filename):
+    with open(filename, 'w') as f:
+        json.dump(results, f)
