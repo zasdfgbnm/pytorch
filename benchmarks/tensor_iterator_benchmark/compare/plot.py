@@ -1,7 +1,6 @@
 import pkg_resources
 
 def plot_data(data):
-    print(data)
     pass
 
 def make_html(compare):
