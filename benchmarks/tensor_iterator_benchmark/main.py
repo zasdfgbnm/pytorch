@@ -26,3 +26,5 @@ if __name__ == '__main__':
         benchmark.dump(args.output)
     else:
         assert args.command == 'compare'
+        import compare
+        compare.generate_html(args.baseline, args.new, args.report)

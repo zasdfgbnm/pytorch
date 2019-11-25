@@ -3,9 +3,9 @@ from . import factories
 from collections import defaultdict
 
 # all sizes are in power of 2
-max_size = 15
-sizes_full = range(0, max_size + 1, 2)
-sizes_small = [10, max_size]
+max_size = 29
+sizes_full = range(8, max_size + 1, 2)
+sizes_small = [10, 20, max_size]
 
 layouts_full = [
     ("contiguous",),
