@@ -5,7 +5,7 @@ from bokeh.resources import INLINE
 from bokeh.layouts import gridplot
 from bokeh.embed import components
 from bokeh.plotting import figure
-from bokeh.models import LinearAxis, Range1d
+from bokeh.models.widgets import Select
 
 def plot1d(data):
     baseline = data['baseline']
@@ -52,17 +52,21 @@ def plot_data(data):
         return plot1d(data)
     return plot2d(data)
 
+def plot_experiment(experiment):
+    plots = OrderedDict()
+    for setup, data in experiment.items():
+        name = str(setup)
+        fig = plot_data(data)
+        plots[name] = fig
+        break
+    return plots
+
 def make_html(compare):
     template_filename = pkg_resources.resource_filename(__name__, "template.html")
-    plots = OrderedDict()
     with open(template_filename) as f:
         template = Template(f.read())
     for title, experiment in compare.items():
-        for setup, data in experiment.items():
-            name = str(setup)
-            fig = plot_data(data)
-            plots[name] = fig
-            break
+        plots = plot_experiment(experiment)
 
     script, div = components(plots)
     resources = INLINE.render()
