@@ -6,8 +6,8 @@ import argparse
 # Run the benchmark and write the result to a json file:
 #   python main.py benchmark output.json
 #
-# Compare a new benchmark result with a baseline and render it to HTML:
-#   python main.py compare baseline.json new.json report.html
+# Compare a new benchmark result with a baseline and render it to a web page:
+#   python main.py compare baseline.json new.json
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Benchmark TensorIterator')
@@ -17,7 +17,6 @@ if __name__ == '__main__':
     compare_parser = subs.add_parser('compare', description='Compare a new benchmark result with a baseline and render it to HTML')
     compare_parser.add_argument('baseline', help='Name of the json file used as baseline')
     compare_parser.add_argument('new', help='Name of the json file for the new result')
-    compare_parser.add_argument('report', help='Name of the HTML file for the report')
     args = parser.parse_args()
 
     if args.command == 'benchmark':
@@ -27,4 +26,4 @@ if __name__ == '__main__':
     else:
         assert args.command == 'compare'
         import compare
-        compare.generate_html(args.baseline, args.new, args.report)
+        compare.serve(args.baseline, args.new)
