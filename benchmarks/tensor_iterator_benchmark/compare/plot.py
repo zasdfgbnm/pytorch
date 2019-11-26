@@ -6,6 +6,7 @@ from bokeh.server.server import Server
 from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
 from bokeh.plotting import figure, ColumnDataSource
+from bokeh.models import Panel, Tabs
 from . import data as data_
 
 def plot1d(source1d0, source1d1, source1d2):
@@ -48,7 +49,6 @@ def plot_experiment(experiment):
         for k, v in selects1d.items():
             setup[k] = v.value
         data = experiment[data_.hashabledict(setup)]
-        print(data)
 
         baseline = data['baseline']
         new = data['new']
@@ -101,10 +101,14 @@ def plot_experiment(experiment):
 
 def serve(compare):
     def make_document(doc):
+        tabs = []
         for title, experiment in compare.items():
-            plots = plot_experiment(experiment)
+            plot = plot_experiment(experiment)
+            tab = Panel(child=plot, title=title)
+            tabs.append(tab)
+        tabs = Tabs(tabs=tabs)
         doc.title = 'Benchmark of TensorIterator'
-        doc.add_root(plots)
+        doc.add_root(tabs)
 
     server = Server(make_document, port=5000)
     server.run_until_shutdown()
