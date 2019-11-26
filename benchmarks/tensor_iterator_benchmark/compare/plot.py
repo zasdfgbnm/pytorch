@@ -1,10 +1,7 @@
 from collections import defaultdict
 from bokeh.layouts import gridplot, column, row
-from bokeh.plotting import figure
 from bokeh.models.widgets import Select
 from bokeh.server.server import Server
-from bokeh.application import Application
-from bokeh.application.handlers.function import FunctionHandler
 from bokeh.plotting import figure, ColumnDataSource
 from bokeh.models import Panel, Tabs
 from . import data as data_
@@ -81,8 +78,8 @@ def plot_experiment(experiment):
                 negative_width.append(width)
 
         return ({'x': x, 'y_baseline': y_baseline, 'y_new': y_new},
-            {'positive_x': positive_x, 'positive_y': positive_y, 'width': positive_width},
-            {'negative_x': negative_x, 'negative_y': negative_y, 'width': negative_width})
+                {'positive_x': positive_x, 'positive_y': positive_y, 'width': positive_width},
+                {'negative_x': negative_x, 'negative_y': negative_y, 'width': negative_width})
 
     d = get_data()
     source1d0 = ColumnDataSource(data=d[0])
