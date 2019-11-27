@@ -88,7 +88,7 @@ def plot_experiment(experiment):
 
     return plot_
 
-def serve(compare):
+def serve(compare, port):
     def make_document(doc):
         tabs = []
         for title, experiment in compare.items():
@@ -99,6 +99,6 @@ def serve(compare):
         doc.title = 'Benchmark of TensorIterator'
         doc.add_root(tabs)
 
-    print('listening port 5000')
-    server = Server(make_document, port=5000)
+    print('listening port', port)
+    server = Server(make_document, port=port)
     server.run_until_shutdown()
