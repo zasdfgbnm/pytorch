@@ -12,7 +12,7 @@ all_dtype_ops = ['abs', 'logical_not', 'sign']
 floating_points_ops = [
     'acos', 'asin', 'ceil', 'expm1', 'frac', 'floor', 'log', 'log10', 'log2', 'log1p',
     'round', 'trunc', 'rsqrt', 'sin', 'sinh', 'sqrt', 'sigmoid', 'erfinv', 'digamma',
-    'lgamma',
+    'trigamma', 'lgamma',
 ]
 
 selected_ops = ['logical_not', 'logical_not_', 'abs', 'rsqrt', 'rsqrt_', 'digamma']
@@ -26,6 +26,8 @@ def filter_illegal(it):
             getattr(a, op)()
             result.append(x)
         except RuntimeError:
+            pass
+        except AttributeError:
             pass
     return result
 

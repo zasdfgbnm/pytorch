@@ -27,6 +27,8 @@ def filter_illegal(it):
             result.append(x)
         except RuntimeError:
             pass
+        except AttributeError:
+            pass
     return result
 
 selected_combinations = filter_illegal(itertools.product(selected_ops, selected_dtypes, selected_dtypes))
