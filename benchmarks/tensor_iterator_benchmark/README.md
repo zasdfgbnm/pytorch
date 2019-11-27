@@ -15,14 +15,32 @@ Install a PyTorch build of the master branch, and run
 python main.py benchmark baseline.json
 ```
 
+Or if you want a more comprehensive benchmark, run
+
+```
+python main.py benchmark --more baseline.json
+```
+
 **Step 2**:
 Go to your branch, build install and run
 ```
 python main.py benchmark new.json
 ```
 
+Or if you want a more comprehensive benchmark, run
+
+```
+python main.py benchmark --more new.json
+```
+
 **Step 3**:
 Run the following command to view the report:
 ```
-python main.py compare baseline.json new.json
+python main.py compare --port 5000 baseline.json new.json
 ```
+
+This will start a bokeh server that do the plots. Visit:
+```
+http://localhost:5000
+```
+to see the results
