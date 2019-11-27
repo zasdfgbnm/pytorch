@@ -31,14 +31,14 @@ def requires_process_group_agent(message=""):
 VALUE_FUTURE = concurrent.futures.Future()
 
 
-def _stub_construct_rpc_agent_options_handler(
+def _stub_construct_rpc_backend_options_handler(
     **kwargs
 ):
-    return mock.Mock()  # RpcAgentOptions.
+    return mock.Mock()  # RpcBackendOptions.
 
 
 def _stub_start_rpc_backend_handler(
-    store, name, rank, world_size, rpc_agent_options
+    store, name, rank, world_size, rpc_backend_options
 ):
     return mock.Mock()  # RpcAgent.
 
@@ -234,6 +234,26 @@ class RpcTest(RpcAgentTestFixture):
             unknown_worker_id = rpc.get_worker_info("WorkerUnknown")
 
     @dist_init
+    def test_get_worker_infos(self):
+        worker_infos = rpc.api._agent.get_worker_infos()
+
+        worker_names = {
+            worker_info.name for worker_info in worker_infos
+        }
+        expected_worker_names = {
+            "worker{}".format(rank) for rank in range(self.world_size)
+        }
+        self.assertEqual(worker_names, expected_worker_names)
+
+        worker_ids = {
+            worker_info.id for worker_info in worker_infos
+        }
+        expected_worker_ids = {
+            rank for rank in range(self.world_size)
+        }
+        self.assertEqual(worker_ids, expected_worker_ids)
+
+    @dist_init
     def test_self_add(self):
         self_worker_info = rpc.get_worker_info()
         self_worker_name = "worker{}".format(self.rank)
@@ -290,7 +310,7 @@ class RpcTest(RpcAgentTestFixture):
 
         backend = rpc.backend_registry.register_backend(
             backend_name,
-            _stub_construct_rpc_agent_options_handler,
+            _stub_construct_rpc_backend_options_handler,
             _stub_start_rpc_backend_handler,
         )
 
@@ -299,17 +319,16 @@ class RpcTest(RpcAgentTestFixture):
         ):
             backend = rpc.backend_registry.register_backend(
                 backend_name,
-                _stub_construct_rpc_agent_options_handler,
+                _stub_construct_rpc_backend_options_handler,
                 _stub_start_rpc_backend_handler,
             )
 
         rpc.init_rpc(
             name="worker1",
             backend=backend,
-            init_method=self.init_method,
             rank=self.rank,
             world_size=self.world_size,
-            rpc_agent_options=self.rpc_agent_options,
+            rpc_backend_options=self.rpc_backend_options,
         )
 
     @requires_process_group_agent("PROCESS_GROUP rpc backend specific test, skip")
@@ -325,7 +344,7 @@ class RpcTest(RpcAgentTestFixture):
                 name="duplicate_name",
                 rank=self.rank,
                 world_size=self.world_size,
-                rpc_agent_options=self.rpc_agent_options,
+                rpc_backend_options=self.rpc_backend_options,
             )
         rpc.wait_all_workers()
 
@@ -334,10 +353,9 @@ class RpcTest(RpcAgentTestFixture):
         rpc.init_rpc(
             name="worker{}".format(self.rank),
             backend=self.rpc_backend,
-            init_method=self.init_method,
             rank=self.rank,
             world_size=self.world_size,
-            rpc_agent_options=self.rpc_agent_options,
+            rpc_backend_options=self.rpc_backend_options,
         )
 
         # This is for the below `dist.barrier`.
@@ -357,10 +375,9 @@ class RpcTest(RpcAgentTestFixture):
             rpc.init_rpc(
                 name="worker{}".format(self.rank),
                 backend=self.rpc_backend,
-                init_method=self.init_method,
                 rank=self.rank,
                 world_size=self.world_size,
-                rpc_agent_options=self.rpc_agent_options,
+                rpc_backend_options=self.rpc_backend_options,
             )
         rpc.wait_all_workers()
 
@@ -376,7 +393,7 @@ class RpcTest(RpcAgentTestFixture):
                 name="abc*",
                 rank=self.rank,
                 world_size=self.world_size,
-                rpc_agent_options=self.rpc_agent_options,
+                rpc_backend_options=self.rpc_backend_options,
             )
 
         base_file_name = self.file_name
@@ -393,7 +410,7 @@ class RpcTest(RpcAgentTestFixture):
                 name=" ",
                 rank=self.rank,
                 world_size=self.world_size,
-                rpc_agent_options=self.rpc_agent_options,
+                rpc_backend_options=self.rpc_backend_options,
             )
 
         # Use a different file path for FileStore to avoid rendezvous mismatch.
@@ -408,7 +425,7 @@ class RpcTest(RpcAgentTestFixture):
                 name="",
                 rank=self.rank,
                 world_size=self.world_size,
-                rpc_agent_options=self.rpc_agent_options,
+                rpc_backend_options=self.rpc_backend_options,
             )
 
         # Use a different file path for FileStore to avoid rendezvous mismatch.
@@ -425,7 +442,7 @@ class RpcTest(RpcAgentTestFixture):
                 name="".join(["a" for i in range(500)]),
                 rank=self.rank,
                 world_size=self.world_size,
-                rpc_agent_options=self.rpc_agent_options,
+                rpc_backend_options=self.rpc_backend_options,
             )
 
         from torch.distributed.rpc.api import _agent
@@ -513,10 +530,9 @@ class RpcTest(RpcAgentTestFixture):
         rpc.init_rpc(
             name="worker%d" % self.rank,
             backend=self.rpc_backend,
-            init_method=self.init_method,
             rank=self.rank,
             world_size=self.world_size,
-            rpc_agent_options=self.rpc_agent_options,
+            rpc_backend_options=self.rpc_backend_options,
         )
 
         n = self.rank + 1
@@ -1063,7 +1079,6 @@ class RpcTest(RpcAgentTestFixture):
         )
         self.assertEqual(rref_c.to_here(), torch.ones(n, n) + 4)
 
-    @unittest.skip("Test is flaky on ASAN, see https://github.com/pytorch/pytorch/issues/29117")
     @dist_init(setup_rpc=True)
     def test_call_method_on_rref(self):
         """
@@ -1091,22 +1106,64 @@ class RpcTest(RpcAgentTestFixture):
 
         self.assertEqual(result, sum(vals))
 
+    def _test_rref_leak(self, ignore_leak=False):
+        rpc.init_rpc(
+            name="worker{}".format(self.rank),
+            backend=self.rpc_backend,
+            rank=self.rank,
+            world_size=self.world_size,
+            rpc_backend_options=self.rpc_backend_options,
+        )
+
+        # This is for the below `dist.barrier`.
+        # For `RpcAgent` other than `ProcessGroupAgent`,
+        # no `_default_pg` is initialized.
+        if not dist.is_initialized():
+            dist.init_process_group(
+                backend="gloo",
+                init_method=self.init_method,
+                rank=self.rank,
+                world_size=self.world_size,
+            )
+        # Wait for all init to complete.
+        dist.barrier()
+
+        rref = rpc.remote(
+            "worker{}".format((self.rank + 1) % self.world_size),
+            torch.add,
+            args=(torch.ones(2, 2), 1)
+        )
+
+        if ignore_leak:
+            import torch.distributed.rpc.api as api
+            api._ignore_rref_leak = True
+
+        rpc.wait_all_workers()
+
+    @dist_init(setup_rpc=False)
+    def test_rref_leak(self):
+        with self.assertRaisesRegex(RuntimeError, "Leaking RRef"):
+            self._test_rref_leak()
+
+    @dist_init(setup_rpc=False)
+    def test_ignore_rref_leak(self):
+        self._test_rref_leak(ignore_leak=True)
+
     @dist_init(setup_rpc=False)
     def test_get_rpc_timeout(self):
         timeout = timedelta(seconds=1)
 
-        # A new `RpcAgentOptions` is constructed
-        # when accessing `self.rpc_agent_options`.
-        rpc_agent_options = self.rpc_agent_options
-        rpc_agent_options.rpc_timeout = timeout
+        # A new `RpcBackendOptions` is constructed
+        # when accessing `self.rpc_backend_options`.
+        rpc_backend_options = self.rpc_backend_options
+        rpc_backend_options.rpc_timeout = timeout
 
         rpc.init_rpc(
             name="worker{}".format(self.rank),
             backend=self.rpc_backend,
-            init_method=self.init_method,
             rank=self.rank,
             world_size=self.world_size,
-            rpc_agent_options=rpc_agent_options,
+            rpc_backend_options=rpc_backend_options,
         )
         set_timeout = rpc.get_rpc_timeout()
         self.assertEqual(timeout, set_timeout)

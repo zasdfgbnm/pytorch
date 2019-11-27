@@ -1,9 +1,15 @@
-from . import _invoke_rpc_builtin, _invoke_rpc_python_udf
-from . import _invoke_remote_builtin, _invoke_remote_python_udf
-from . import _start_rpc_agent
-from . import _destroy_rref_context, _cleanup_python_rpc_handler
-from . import WorkerInfo
-from . import backend_registry
+from . import (
+    RpcBackendOptions,
+    WorkerInfo,
+    _cleanup_python_rpc_handler,
+    _destroy_rref_context,
+    _invoke_remote_builtin,
+    _invoke_remote_python_udf,
+    _invoke_rpc_builtin,
+    _invoke_rpc_python_udf,
+    _start_rpc_agent,
+    backend_registry,
+)
 from .internal import _internal_rpc_pickler, PythonUDF
 
 import contextlib
@@ -15,7 +21,16 @@ import torch.distributed as dist
 
 
 _agent = None
-
+# NB: Ignoring RRef leaks during shutdown. Without this, applications have to
+# make sure there is no references to any RRef in the application code and
+# Python GC has done its job to delete those RRefs. This is could result in bad
+# debugging experiences especially when for large applications. Therefore, by
+# default, we are going to ignore RRef leaks during shutdown. This is usually
+# fine as shutdown means applications have done training and no longer care
+# about states.
+#
+# To enable RRef leak checking, set this _ignore_rref_leak to False
+_ignore_rref_leak = True
 _default_pickler = _internal_rpc_pickler
 
 @contextlib.contextmanager
@@ -29,6 +44,7 @@ def _use_rpc_pickler(rpc_pickler):
         yield
     finally:
         _default_pickler = _internal_rpc_pickler
+
 
 def _require_initialized(func):
     @functools.wraps(func)
@@ -70,7 +86,7 @@ def wait_all_workers():
     if _agent:
         _agent.join()
         _agent = None
-        _destroy_rref_context()
+        _destroy_rref_context(_ignore_rref_leak)
         # clean up python rpc handler in wait_all_workers(), see comments in
         # PythonRpcHandler::cleanup(), call it in python API because the
         # cleanup() function has python dependency, it assumes python
@@ -84,34 +100,13 @@ def _init_rpc_backend(
     name=None,
     rank=-1,
     world_size=-1,
-    rpc_agent_options=None,
+    rpc_backend_options=None,
 ):
-    from . import RpcAgentOptions
 
     if sys.version_info < (3, 0):
         raise RuntimeError("RPC package does not support Python2.")
 
-    if not isinstance(backend, backend_registry.BackendType):
-        raise RuntimeError("`backend` must be a `backend_registry.BackendType`.")
-
-    if not isinstance(store, dist.Store):
-        raise RuntimeError("`store` must be a `c10d::Store`. {}".format(store))
-
-    if not isinstance(name, str):
-        raise RuntimeError("`name` must be a string. {}".format(name))
-
-    if not isinstance(rank, numbers.Integral):
-        raise RuntimeError("`rank` must be an integer. {}".format(rank))
-
-    if not isinstance(world_size, numbers.Integral):
-        raise RuntimeError("`world_size` must be an integer. {}".format(world_size))
-
-    if not isinstance(rpc_agent_options, RpcAgentOptions):
-        raise RuntimeError(
-            "`rpc_agent_options` must be an `RpcAgentOptions`. {}".format(
-                rpc_agent_options
-            )
-        )
+    _validate_rpc_args(backend, store, name, rank, world_size, rpc_backend_options)
 
     global _agent
 
@@ -125,7 +120,7 @@ def _init_rpc_backend(
         name=name,
         rank=rank,
         world_size=world_size,
-        rpc_agent_options=rpc_agent_options,
+        rpc_backend_options=rpc_backend_options,
     )
     _start_rpc_agent(_agent)
 
@@ -159,6 +154,23 @@ def _to_worker_info(name_or_info):
         return get_worker_info(name_or_info)
     else:
         raise ValueError("Cannot get WorkerInfo from name".format(name_or_info))
+
+def _validate_rpc_args(backend, store, name, rank, world_size, rpc_backend_options):
+    type_mapping = {
+        backend: backend_registry.BackendType,
+        store: dist.Store,
+        name: str,
+        rank: numbers.Integral,
+        world_size: numbers.Integral,
+        rpc_backend_options: RpcBackendOptions,
+    }
+    for arg, arg_type in type_mapping.items():
+        if not isinstance(arg, arg_type):
+            raise RuntimeError(
+                "Argument {} must be of type {} but got type {}".format(
+                    arg, arg_type, type(arg)
+                )
+            )
 
 
 @_require_initialized
