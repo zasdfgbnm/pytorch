@@ -44,7 +44,6 @@ all_combinations = filter_illegal(itertools.chain(
     itertools.product((x + '_' for x in other), floating_point_dtypes, floating_point_dtypes),
 ))
 
-
 def larger_dtype(dtype1, dtype2):
     len1 = layout_shape.sizeof(dtype1)
     len2 = layout_shape.sizeof(dtype2)
