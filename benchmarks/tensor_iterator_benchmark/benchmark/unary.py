@@ -17,13 +17,25 @@ floating_points_ops = [
 
 selected_ops = ['logical_not', 'logical_not_', 'abs', 'rsqrt', 'rsqrt_', 'digamma']
 
+def filter_illegal(it):
+    result = []
+    for x in it:
+        op, dtype = x
+        a = torch.empty(5, dtype=dtype, device='cuda')
+        try:
+            getattr(a, op)()
+            result.append(x)
+        except RuntimeError:
+            pass
+    return result
+
 selected_combinations = itertools.product(selected_ops, selected_dtypes)
-all_combinations = itertools.chain(
+all_combinations = filter_illegal(itertools.chain(
     itertools.product(floating_points_ops, floating_point_dtypes),
     itertools.product((x + '_' for x in floating_points_ops), floating_point_dtypes),
     itertools.product(all_dtype_ops, all_dtypes),
     itertools.product((x + '_' for x in all_dtype_ops), all_dtypes),
-)
+))
 
 
 def run(more):
