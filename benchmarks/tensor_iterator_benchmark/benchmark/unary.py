@@ -22,15 +22,13 @@ def compare_problem_sizes():
         for dtype in selected_dtypes:
 
             def setup(device, non_contiguous_size=None):
-                ret = {
+                return {
                     'op': op,
                     'dtype': str(dtype),
                     'layout': name,
                     'device': device,
+                    'non_contiguous_size': non_contiguous_size,
                 }
-                if non_contiguous_size is not None:
-                    ret['non_contiguous_size'] = non_contiguous_size
-                return ret
 
             def benchmark_cpu(factories):
                 print('Benchmarking', op, 'with dtype', dtype, 'and layout', name, 'on cpu')
