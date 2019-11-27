@@ -49,7 +49,7 @@ def plot_experiment(experiment):
         if len(sx) >= 2:
             width = (sx[1] - sx[0]) * 0.8
         else:
-            width = 0
+            width = 2
 
         positive_x = []
         positive_y = []

@@ -13,6 +13,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Benchmark TensorIterator')
     subs = parser.add_subparsers(dest="command")
     benchmark_parser = subs.add_parser('benchmark', description='Benchmark TensorIterator and write result to a json file')
+    benchmark_parser.add_argument('--more', help='Run more benchmarks than just the selected ones')
     benchmark_parser.add_argument('output', help='Name of the output json file')
     compare_parser = subs.add_parser('compare', description='Compare a new benchmark result with a baseline and render it to HTML')
     compare_parser.add_argument('baseline', help='Name of the json file used as baseline')
@@ -21,7 +22,7 @@ if __name__ == '__main__':
 
     if args.command == 'benchmark':
         import benchmark
-        benchmark.run()
+        benchmark.run(args.more)
         benchmark.dump(args.output)
     else:
         assert args.command == 'compare'

@@ -10,9 +10,9 @@ def warm_up_cuda():
     for _ in range(10):
         _ = a + a
 
-def run():
+def run(more):
     warm_up_cuda()
-    for title, result in unary.run():
+    for title, result in unary.run(more):
         results[title].append(result)
 
 def dump(filename):

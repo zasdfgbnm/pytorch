@@ -1,11 +1,9 @@
 from typing import NamedTuple, Tuple, Union
 from . import factories
 from collections import defaultdict
-
-# all sizes are in power of 2
-max_size = 29
-sizes_full = range(8, max_size + 1, 2)
-sizes_small = [10, 20, max_size]
+from operator import mul
+from functools import reduce
+import torch
 
 layouts_full = [
     ("contiguous",),
@@ -71,27 +69,51 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
     return name, LayoutShape(problem_size, factory, shape)
 
 
-def combine_layouts_and_shapes(layouts, sizes):
+def numel_after_pad(layout, shape):
+    ret = 1
+    for x in shape:
+        ret *= x + factories.padding
+    if set(layout) == {'contiguous', 'non_contiguous'}:
+        return ret
+    elif set(layout) == {'non_contiguous'}:
+        return (1 + factories.padding) * ret
+    assert set(layout) == {'contiguous'}
+    return reduce(mul, shape, 1)
+
+
+def sizeof(dtype):
+    return torch.empty((), dtype=dtype).element_size()
+
+
+def combine_layouts_and_shapes(layouts, more, dtype):
+    max_size = 31 if more else 29  # number of bytes in power of 2
+    step = 1 if more else 2
     ret1d = defaultdict(list)
     ret2d = defaultdict(lambda: defaultdict(list))
     for layout in layouts:
         if set(layout) == {'contiguous'}:
-            for size in sizes:
+            for size in range(0, max_size + 1, step):
                 name, result = make_layout_shape(layout, contiguous_size=size)
+                if numel_after_pad(layout, result.shape) * sizeof(dtype) > 2 ** max_size:
+                    break
                 ret1d[name].append(result)
         elif set(layout) == {'non_contiguous'}:
-            for size in sizes:
+            for size in range(0, max_size + 1, step):
                 name, result = make_layout_shape(layout, non_contiguous_size=size)
+                if numel_after_pad(layout, result.shape) * sizeof(dtype) > 2 ** max_size:
+                    break
                 ret1d[name].append(result)
         else:
             assert set(layout) == {'contiguous', 'non_contiguous'}
-            for size1 in sizes:
-                for size2 in sizes:
-                    if size1 + size2 <= max_size:
-                        name, result = make_layout_shape(layout, size1, size2)
+            for size1 in range(0, max_size + 1, step):
+                for size2 in range(0, max_size + 1, step):
+                    name, result = make_layout_shape(layout, size1, size2)
+                    if numel_after_pad(layout, result.shape) * sizeof(dtype) <= 2 ** max_size:
                         ret2d[name][size2].append(result)
     return ret1d, ret2d
 
 
-full1d, full2d = combine_layouts_and_shapes(layouts_full, sizes_full)
-small1d, small2d = combine_layouts_and_shapes(layouts_small, sizes_small)
+def get(dtype, more):
+    layout = layouts_full if more else layouts_small
+    return combine_layouts_and_shapes(layout, more, dtype)
+
