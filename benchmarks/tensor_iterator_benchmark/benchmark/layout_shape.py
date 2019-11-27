@@ -116,4 +116,3 @@ def combine_layouts_and_shapes(layouts, more, dtype):
 def get(dtype, more):
     layout = layouts_full if more else layouts_small
     return combine_layouts_and_shapes(layout, more, dtype)
-

@@ -15,7 +15,7 @@ floating_points_ops = [
     'trigamma', 'lgamma',
 ]
 
-selected_ops = ['logical_not', 'logical_not_', 'abs', 'abs_', 'rsqrt', 'rsqrt_', 'digamma', 'digamma_']
+selected_ops = ['logical_not', 'logical_not_', 'abs', 'rsqrt', 'rsqrt_', 'digamma']
 
 selected_combinations = itertools.product(selected_ops, selected_dtypes)
 all_combinations = itertools.chain(
@@ -25,7 +25,7 @@ all_combinations = itertools.chain(
 
 
 def compare_problem_sizes(more):
-    title = "unary op compare problem sizes"
+    title = "unary op"
     for op, dtype in all_combinations if more else selected_combinations:
 
         def setup(device, non_contiguous_size=None):
