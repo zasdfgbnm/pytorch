@@ -24,7 +24,7 @@ layouts_small = [
 
 
 class LayoutShape(NamedTuple):
-    problem_size: Union[int, Tuple[int, int]]
+    problem_size: int
     factory: callable
     shape: Tuple
 
@@ -64,7 +64,7 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         assert non_contiguous_dims > 0
         assert layout[0] == 'contiguous'
         name = f"contiguous 1d and non-contiguous {non_contiguous_dims}d"
-        problem_size = (contiguous_size, non_contiguous_size)
+        problem_size = contiguous_size * non_contiguous_size
         factory = factories.contiguous_last_dim
         shape = split_size(non_contiguous_size, non_contiguous_dims) + (contiguous_size,)
     shape = tuple(2 ** x for x in shape)
@@ -72,25 +72,26 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
 
 
 def combine_layouts_and_shapes(layouts, sizes):
-    ret = defaultdict(list)
+    ret1d = defaultdict(list)
+    ret2d = defaultdict(lambda: defaultdict(list))
     for layout in layouts:
         if set(layout) == {'contiguous'}:
             for size in sizes:
                 name, result = make_layout_shape(layout, contiguous_size=size)
-                ret[name].append(result)
+                ret1d[name].append(result)
         elif set(layout) == {'non_contiguous'}:
             for size in sizes:
                 name, result = make_layout_shape(layout, non_contiguous_size=size)
-                ret[name].append(result)
+                ret1d[name].append(result)
         else:
             assert set(layout) == {'contiguous', 'non_contiguous'}
             for size1 in sizes:
                 for size2 in sizes:
                     if size1 + size2 <= max_size:
                         name, result = make_layout_shape(layout, size1, size2)
-                        ret[name].append(result)
-    return ret
+                        ret2d[name][size2].append(result)
+    return ret1d, ret2d
 
 
-full = combine_layouts_and_shapes(layouts_full, sizes_full)
-small = combine_layouts_and_shapes(layouts_small, sizes_small)
+full1d, full2d = combine_layouts_and_shapes(layouts_full, sizes_full)
+small1d, small2d = combine_layouts_and_shapes(layouts_small, sizes_small)

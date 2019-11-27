@@ -20,31 +20,32 @@ def compare_problem_sizes():
     title = "unary op compare problem sizes"
     for op in selected_ops:
         for dtype in selected_dtypes:
-            for name, factories in layout_shape.full.items():
 
-                def setup(device):
-                    return {
-                        'op': op,
-                        'dtype': str(dtype),
-                        'layout': name,
-                        'device': device,
-                    }
+            def setup(device, non_contiguous_size=None):
+                ret = {
+                    'op': op,
+                    'dtype': str(dtype),
+                    'layout': name,
+                    'device': device,
+                }
+                if non_contiguous_size is not None:
+                    ret['non_contiguous_size'] = non_contiguous_size
+                return ret
 
-                # benchmark cpu
-                if dtype is not torch.float16:
-                    print('Benchmarking', op, 'with dtype', dtype, 'and layout', name, 'on cpu')
-                    data = []
-                    for factory in factories:
-                        tensor = factory.new(dtype, 'cpu')
-                        f = getattr(tensor, op)
-                        one_loop_timer = timing.time_one_loop(f)
-                        result = timing.time_func(one_loop_timer)
-                        data.append(({'problem_size': factory.problem_size, 'result': result}))
-                        del tensor, one_loop_timer, f
-                        gc.collect()
-                    yield (title, {'setup': setup('cpu'), 'data': data})
+            def benchmark_cpu(factories):
+                print('Benchmarking', op, 'with dtype', dtype, 'and layout', name, 'on cpu')
+                data = []
+                for factory in factories:
+                    tensor = factory.new(dtype, 'cpu')
+                    f = getattr(tensor, op)
+                    one_loop_timer = timing.time_one_loop(f)
+                    result = timing.time_func(one_loop_timer)
+                    data.append(({'problem_size': factory.problem_size, 'result': result}))
+                    del tensor, one_loop_timer, f
+                    gc.collect()
+                return data
 
-                # benchmark cuda
+            def benchmark_cuda(factories):
                 print('Benchmarking', op, 'with dtype', dtype, 'and layout', name, 'on cuda')
                 data = []
                 for factory in factories:
@@ -55,7 +56,19 @@ def compare_problem_sizes():
                     data.append(({'problem_size': factory.problem_size, 'result': result}))
                     del tensor, one_loop_timer, f
                     gc.collect()
-                yield (title, {'setup': setup('cuda'), 'data': data})
+                return data
+
+            for name, factories in layout_shape.full1d.items():
+                if dtype is not torch.float16:
+                    yield (title, {'setup': setup('cpu'), 'data': benchmark_cpu(factories)})
+                yield (title, {'setup': setup('cuda'), 'data': benchmark_cuda(factories)})
+
+            for name, d in layout_shape.full2d.items():
+                for non_contiguous_size, factories in d.items():
+                    if dtype is not torch.float16:
+                        yield (title, {'setup': setup('cpu', non_contiguous_size), 'data': benchmark_cpu(factories)})
+                    yield (title, {'setup': setup('cuda', non_contiguous_size), 'data': benchmark_cuda(factories)})
+
 
 def run():
     yield from compare_problem_sizes()
