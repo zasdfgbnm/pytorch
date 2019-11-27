@@ -17,15 +17,18 @@ class DataItem(NamedTuple):
 def data_to_tuple(data):
     return sorted([DataItem(x['problem_size'], x['result']) for x in data])
 
+def values_to_string(setup):
+    return {k: str(v) for k, v in setup.items()}
+
 def compare(baseline, new):
     result = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     for title, experiment in baseline.items():
         for e in experiment:
-            setup, data = e['setup'], e['data']
+            setup, data = values_to_string(e['setup']), e['data']
             result[title][hashabledict(setup)]['baseline'] = data_to_tuple(data)
     for title, experiment in new.items():
         for e in experiment:
-            setup, data = e['setup'], e['data']
+            setup, data = values_to_string(e['setup']), e['data']
             result[title][hashabledict(setup)]['new'] = data_to_tuple(data)
     for title, experiment in result.items():
         for setup, data in experiment.items():

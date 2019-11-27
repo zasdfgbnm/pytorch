@@ -99,5 +99,6 @@ def serve(compare):
         doc.title = 'Benchmark of TensorIterator'
         doc.add_root(tabs)
 
+    print('listening port 5000')
     server = Server(make_document, port=5000)
     server.run_until_shutdown()

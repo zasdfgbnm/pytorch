@@ -22,7 +22,7 @@ python main.py benchmark new.json
 ```
 
 **Step 3**:
-Run the following command to get the report:
+Run the following command to view the report:
 ```
-python main.py compare baseline.json new.json report.html
+python main.py compare baseline.json new.json
 ```

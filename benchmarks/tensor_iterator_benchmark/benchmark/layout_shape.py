@@ -64,7 +64,7 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         assert non_contiguous_dims > 0
         assert layout[0] == 'contiguous'
         name = f"contiguous 1d and non-contiguous {non_contiguous_dims}d"
-        problem_size = contiguous_size * non_contiguous_size
+        problem_size = contiguous_size + non_contiguous_size
         factory = factories.contiguous_last_dim
         shape = split_size(non_contiguous_size, non_contiguous_dims) + (contiguous_size,)
     shape = tuple(2 ** x for x in shape)
