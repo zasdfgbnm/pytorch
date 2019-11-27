@@ -3,7 +3,7 @@ from bokeh.layouts import gridplot, column, row
 from bokeh.models.widgets import Select
 from bokeh.server.server import Server
 from bokeh.plotting import figure, ColumnDataSource
-from bokeh.models import Panel, Tabs, LogColorMapper
+from bokeh.models import Panel, Tabs
 from . import data as data_
 
 def plot(source1d0, source1d1, source1d2):

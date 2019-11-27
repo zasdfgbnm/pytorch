@@ -20,11 +20,13 @@ selected_ops = ['logical_not', 'logical_not_', 'abs', 'rsqrt', 'rsqrt_', 'digamm
 selected_combinations = itertools.product(selected_ops, selected_dtypes)
 all_combinations = itertools.chain(
     itertools.product(floating_points_ops, floating_point_dtypes),
-    itertools.product(all_dtype_ops, all_dtypes)
+    itertools.product((x + '_' for x in floating_points_ops), floating_point_dtypes),
+    itertools.product(all_dtype_ops, all_dtypes),
+    itertools.product((x + '_' for x in all_dtype_ops), all_dtypes),
 )
 
 
-def compare_problem_sizes(more):
+def run(more):
     title = "unary op"
     for op, dtype in all_combinations if more else selected_combinations:
 
@@ -74,7 +76,3 @@ def compare_problem_sizes(more):
                 if dtype is not torch.float16:
                     yield (title, {'setup': setup('cpu', non_contiguous_size), 'data': benchmark_cpu(factories)})
                 yield (title, {'setup': setup('cuda', non_contiguous_size), 'data': benchmark_cuda(factories)})
-
-
-def run(more):
-    yield from compare_problem_sizes(more)

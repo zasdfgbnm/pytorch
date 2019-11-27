@@ -12,8 +12,8 @@ def warm_up_cuda():
 
 def run(more):
     warm_up_cuda()
-    for title, result in unary.run(more):
-        results[title].append(result)
+    # for title, result in unary.run(more):
+    #     results[title].append(result)
     for title, result in binary.run(more):
         results[title].append(result)
 

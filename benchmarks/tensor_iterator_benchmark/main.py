@@ -16,7 +16,7 @@ if __name__ == '__main__':
     benchmark_parser.add_argument('--more', help='Run more benchmarks than just the selected ones')
     benchmark_parser.add_argument('output', help='Name of the output json file')
     compare_parser = subs.add_parser('compare', description='Compare a new benchmark result with a baseline and render it to HTML')
-    benchmark_parser.add_argument('--port', type=int, default=5000, help='Port to bind to')
+    compare_parser.add_argument('--port', type=int, default=5000, help='Port to bind to')
     compare_parser.add_argument('baseline', help='Name of the json file used as baseline')
     compare_parser.add_argument('new', help='Name of the json file for the new result')
     args = parser.parse_args()

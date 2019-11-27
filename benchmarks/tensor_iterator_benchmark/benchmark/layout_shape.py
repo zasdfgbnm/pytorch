@@ -1,9 +1,9 @@
-from typing import NamedTuple, Tuple, Union
-from . import factories
+from typing import NamedTuple, Tuple
 from collections import defaultdict
 from operator import mul
 from functools import reduce
 import torch
+
 
 layouts_full = [
     ("contiguous",),
@@ -20,6 +20,20 @@ layouts_small = [
     ("contiguous", "non_contiguous", "non_contiguous", "non_contiguous"),
 ]
 
+padding = 1
+
+def trivial_1d(shape, dtype=None, device=None):
+    return torch.empty(shape, dtype=dtype, device=device)
+
+def contiguous_last_dim(shape, dtype=None, device=None):
+    underlying_shape = tuple(s + padding for s in shape)
+    t = trivial_1d(underlying_shape, dtype, device)
+    for i, s in enumerate(shape):
+        t = t.narrow(i, 0, s)
+    return t
+
+def non_contiguous(shape, dtype=None, device=None):
+    return contiguous_last_dim((*shape, 1), dtype, device).squeeze(-1)
 
 class LayoutShape(NamedTuple):
     problem_size: int
@@ -49,13 +63,13 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         assert countiguous_dims > 0
         name = f"all contiguous {countiguous_dims}d"
         problem_size = contiguous_size
-        factory = factories.trivial_1d
+        factory = trivial_1d
         shape = split_size(contiguous_size, countiguous_dims)
     elif countiguous_dims == 0:
         assert non_contiguous_dims > 0
         name = f"all non-contiguous {non_contiguous_dims}d"
         problem_size = non_contiguous_size
-        factory = factories.non_contiguous
+        factory = non_contiguous
         shape = split_size(non_contiguous_size, non_contiguous_dims)
     else:
         assert countiguous_dims == 1
@@ -63,7 +77,7 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
         assert layout[0] == 'contiguous'
         name = f"contiguous 1d and non-contiguous {non_contiguous_dims}d"
         problem_size = contiguous_size + non_contiguous_size
-        factory = factories.contiguous_last_dim
+        factory = contiguous_last_dim
         shape = split_size(non_contiguous_size, non_contiguous_dims) + (contiguous_size,)
     shape = tuple(2 ** x for x in shape)
     return name, LayoutShape(problem_size, factory, shape)
@@ -72,11 +86,11 @@ def make_layout_shape(layout, contiguous_size=0, non_contiguous_size=0):
 def numel_after_pad(layout, shape):
     ret = 1
     for x in shape:
-        ret *= x + factories.padding
+        ret *= x + padding
     if set(layout) == {'contiguous', 'non_contiguous'}:
         return ret
     elif set(layout) == {'non_contiguous'}:
-        return (1 + factories.padding) * ret
+        return (1 + padding) * ret
     assert set(layout) == {'contiguous'}
     return reduce(mul, shape, 1)
 
