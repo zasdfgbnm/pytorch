@@ -8,8 +8,8 @@ all_dtypes = torch.testing.get_all_dtypes()
 floating_point_dtypes = [x for x in all_dtypes if x.is_floating_point]
 integeral_dtypes = set(all_dtypes) - set(floating_point_dtypes)
 
-arithmetic_nodiv = ['add', 'sub', 'mul']
-compare = ['lt', 'le', 'gt', 'ge', 'eq', 'ne']
+arithmetic_nodiv = ['add']  # + ['sub', 'mul']
+compare = ['lt']  # + ['le', 'gt', 'ge', 'eq', 'ne']
 bitwise = ['bitwise_xor']
 logical = ['logical_xor']
 other = ['atan2']
@@ -32,7 +32,7 @@ def filter_illegal(it):
     return result
 
 selected_combinations = filter_illegal(itertools.product(selected_ops, selected_dtypes, selected_dtypes))
-all_combinations = filter_illegal(itertools.chain(
+more_combinations = filter_illegal(itertools.chain(
     itertools.product(arithmetic_nodiv, all_dtypes, all_dtypes),
     itertools.product((x + '_' for x in arithmetic_nodiv), all_dtypes, all_dtypes),
     itertools.product(['div', 'div_'], floating_point_dtypes, floating_point_dtypes),
@@ -53,9 +53,10 @@ def larger_dtype(dtype1, dtype2):
 
 def run(more):
     title = "binary op"
-    for op, dtype1, dtype2 in all_combinations if more else selected_combinations:
+    combinations = more_combinations if more else selected_combinations
+    for op, dtype1, dtype2 in combinations:
 
-        def setup(device, non_contiguous_size=None):
+        def setup(device, non_contiguous_size=0):
             return {
                 'op': op,
                 'dtype1': str(dtype1),

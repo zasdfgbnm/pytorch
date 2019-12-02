@@ -42,9 +42,10 @@ all_combinations = filter_illegal(itertools.chain(
 
 def run(more):
     title = "unary op"
-    for op, dtype in all_combinations if more else selected_combinations:
+    combinations = all_combinations if more else selected_combinations
+    for op, dtype in combinations:
 
-        def setup(device, non_contiguous_size=None):
+        def setup(device, non_contiguous_size=0):
             return {
                 'op': op,
                 'dtype': str(dtype),

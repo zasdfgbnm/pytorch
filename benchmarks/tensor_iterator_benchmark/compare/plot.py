@@ -21,6 +21,12 @@ def plot(source1d0, source1d1, source1d2):
     p2.vbar(x='negative_x', bottom=0, top='negative_y', color='red', width='width', source=source1d2)
     return gridplot([[p1, p2]])
 
+def sort(l):
+    try:
+        return sorted(l, key=int)
+    except ValueError:
+        return sorted(l)
+
 def plot_experiment(experiment):
     values = defaultdict(set)
     for setup, _ in experiment.items():
@@ -29,7 +35,8 @@ def plot_experiment(experiment):
 
     selects = {}
     for k, v in values.items():
-        selects[k] = Select(title=k, value=next(iter(v)), options=list(v))
+        v = sort(list(v))
+        selects[k] = Select(title=k, value=v[0], options=v)
 
     def get_data():
         setup = {}

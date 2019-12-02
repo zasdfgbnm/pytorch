@@ -5,18 +5,18 @@ from functools import reduce
 import torch
 
 
-layouts_full = [
+selected_layouts = [
+    ("contiguous",),
+    ("non_contiguous", "non_contiguous", "non_contiguous"),
+    ("contiguous", "non_contiguous", "non_contiguous", "non_contiguous"),
+]
+
+more_layouts = [
     ("contiguous",),
     ("contiguous", "contiguous", "contiguous"),
     ("non_contiguous",),
     ("non_contiguous", "non_contiguous", "non_contiguous"),
     ("contiguous", "non_contiguous"),
-    ("contiguous", "non_contiguous", "non_contiguous", "non_contiguous"),
-]
-
-layouts_small = [
-    ("contiguous",),
-    ("non_contiguous", "non_contiguous", "non_contiguous"),
     ("contiguous", "non_contiguous", "non_contiguous", "non_contiguous"),
 ]
 
@@ -99,9 +99,9 @@ def sizeof(dtype):
     return torch.empty((), dtype=dtype).element_size()
 
 
-def combine_layouts_and_shapes(layouts, more, dtype):
-    max_size = 31 if more else 29  # number of bytes in power of 2
-    step = 1 if more else 2
+def combine_layouts_and_shapes(layouts, dtype):
+    max_size = 30  # number of bytes in power of 2
+    step = 1
     ret1d = defaultdict(list)
     ret2d = defaultdict(lambda: defaultdict(list))
     for layout in layouts:
@@ -128,5 +128,5 @@ def combine_layouts_and_shapes(layouts, more, dtype):
 
 
 def get(dtype, more):
-    layout = layouts_full if more else layouts_small
-    return combine_layouts_and_shapes(layout, more, dtype)
+    layout = more_layouts if more else selected_layouts
+    return combine_layouts_and_shapes(layout, dtype)
