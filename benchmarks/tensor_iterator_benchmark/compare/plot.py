@@ -11,7 +11,7 @@ def plot(source1d0, source1d1, source1d2):
     p1.line(x='x', y='y_baseline', source=source1d0, color='blue', legend_label='baseline')
     p1.line(x='x', y='y_new', source=source1d0, color='red', legend_label='new')
     p1.xaxis.axis_label = 'Tensor size (power of 2)'
-    p1.yaxis.axis_label = 'Time (seconds)'
+    p1.yaxis.axis_label = 'Performance (giga elements / second)'
 
     p2 = figure()
     p2.xaxis.axis_label = 'Tensor size (power of 2)'

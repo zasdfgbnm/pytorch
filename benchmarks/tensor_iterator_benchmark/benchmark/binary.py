@@ -56,7 +56,7 @@ def run(more):
     combinations = more_combinations if more else selected_combinations
     for op, dtype1, dtype2 in combinations:
 
-        def setup(device, non_contiguous_size=0):
+        def setup(device, non_contiguous_size='-inf'):
             return {
                 'op': op,
                 'dtype1': str(dtype1),
@@ -74,7 +74,7 @@ def run(more):
                 tensor2 = factory.new(dtype2, 'cpu')
                 operator = getattr(tensor1, op)
                 one_loop_timer = timing.time_one_loop(lambda: operator(tensor2))
-                result = timing.time_func(one_loop_timer)
+                result = timing.time_func(one_loop_timer, tensor1.numel())
                 data.append(({'problem_size': factory.problem_size, 'result': result}))
                 del tensor1, tensor2, one_loop_timer, operator
                 gc.collect()
@@ -88,7 +88,7 @@ def run(more):
                 tensor2 = factory.new(dtype2, 'cuda')
                 operator = getattr(tensor1, op)
                 one_loop_timer = timing.time_one_loop_cuda(lambda: operator(tensor2))
-                result = timing.time_func(one_loop_timer)
+                result = timing.time_func(one_loop_timer, tensor1.numel())
                 data.append(({'problem_size': factory.problem_size, 'result': result}))
                 del tensor1, tensor2, one_loop_timer, operator
                 gc.collect()

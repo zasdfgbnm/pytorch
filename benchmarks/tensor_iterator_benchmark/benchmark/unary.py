@@ -32,20 +32,19 @@ def filter_illegal(it):
     return result
 
 selected_combinations = itertools.product(selected_ops, selected_dtypes)
-all_combinations = filter_illegal(itertools.chain(
+more_combinations = filter_illegal(itertools.chain(
     itertools.product(floating_points_ops, floating_point_dtypes),
     itertools.product((x + '_' for x in floating_points_ops), floating_point_dtypes),
     itertools.product(all_dtype_ops, all_dtypes),
     itertools.product((x + '_' for x in all_dtype_ops), all_dtypes),
 ))
 
-
 def run(more):
     title = "unary op"
-    combinations = all_combinations if more else selected_combinations
+    combinations = more_combinations if more else selected_combinations
     for op, dtype in combinations:
 
-        def setup(device, non_contiguous_size=0):
+        def setup(device, non_contiguous_size='-inf'):
             return {
                 'op': op,
                 'dtype': str(dtype),
@@ -61,7 +60,7 @@ def run(more):
                 tensor = factory.new(dtype, 'cpu')
                 f = getattr(tensor, op)
                 one_loop_timer = timing.time_one_loop(f)
-                result = timing.time_func(one_loop_timer)
+                result = timing.time_func(one_loop_timer, tensor.numel())
                 data.append(({'problem_size': factory.problem_size, 'result': result}))
                 del tensor, one_loop_timer, f
                 gc.collect()
@@ -74,7 +73,7 @@ def run(more):
                 tensor = factory.new(dtype, 'cuda')
                 f = getattr(tensor, op)
                 one_loop_timer = timing.time_one_loop_cuda(f)
-                result = timing.time_func(one_loop_timer)
+                result = timing.time_func(one_loop_timer, tensor.numel())
                 data.append(({'problem_size': factory.problem_size, 'result': result}))
                 del tensor, one_loop_timer, f
                 gc.collect()
