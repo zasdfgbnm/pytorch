@@ -23,7 +23,7 @@ def plot(source1d0, source1d1, source1d2):
 
 def sort(l):
     try:
-        return sorted(l, key=int)
+        return sorted(l, key=float)
     except ValueError:
         return sorted(l)
 

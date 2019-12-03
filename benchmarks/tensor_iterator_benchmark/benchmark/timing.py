@@ -36,7 +36,7 @@ def time_one_loop_cuda(f):
             f()
             torch.cuda.synchronize()
         end = timeit.default_timer()
-        return end - start
+        return (end - start) / loop_size
     return timer
 
 def time_func(one_loop_timer, numel):
