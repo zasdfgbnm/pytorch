@@ -15,7 +15,7 @@ constexpr int MAX_DIMS = 16;
 constexpr int MAX_DIMS = 25;
 #endif
 
-template <int NARGS, typename index_t = uint32_t>
+template <int NARGS, bool skip_first=false, typename index_t = uint32_t>
 struct OffsetCalculator {
   // The offset for each argument (in bytes). Wrapper around fixed-size array.
   using offset_type = at::detail::Array<index_t, NARGS>;
@@ -42,7 +42,7 @@ struct OffsetCalculator {
     }
 
     #pragma unroll
-    for (int dim = 0; dim < MAX_DIMS; ++dim) {
+    for (int dim = int(skip_first); dim < MAX_DIMS; ++dim) {
       if (dim == dims) {
         break;
       }

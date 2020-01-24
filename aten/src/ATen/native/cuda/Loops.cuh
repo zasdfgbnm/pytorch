@@ -72,6 +72,16 @@ static constexpr int launch_bound2 = 4;
 
 namespace at { namespace native {
 
+template<int N, bool skip_first=false>
+static OffsetCalculator<N, skip_first> make_offset_calculator(const TensorIterator& iter) {
+  AT_ASSERT(N == iter.ntensors());
+  std::array<const int64_t*, N> strides;
+  for (int i = 0; i < N; i++) {
+    strides[i] = iter.strides(i).data();
+  }
+  return OffsetCalculator<N, skip_first>(iter.ndim(), iter.shape().data(), strides.data());
+}
+
 // NOTE: @zasdfgbnm is currently working on rewriting the gpu loops.
 // Some of the old codes has been moved to namespace legacy, and
 // new codes will be put into namespace modern. These two namespaces
@@ -93,16 +103,6 @@ __global__ void elementwise_kernel(int N, func_t f) {
       idx += nt;
     }
   }
-}
-
-template<int N>
-static OffsetCalculator<N> make_offset_calculator(const TensorIterator& iter) {
-  AT_ASSERT(N == iter.ntensors());
-  std::array<const int64_t*, N> strides;
-  for (int i = 0; i < N; i++) {
-    strides[i] = iter.strides(i).data();
-  }
-  return OffsetCalculator<N>(iter.ndim(), iter.shape().data(), strides.data());
 }
 
 template<int nt, int vt, typename func_t>
@@ -327,6 +327,12 @@ static void launch_kernel(int64_t N, const func_t& f, array_t data) {
   AT_CUDA_CHECK(cudaGetLastError());
 }
 
+// check if it is possible to make the work handled by each block contiguous,
+// so that we can use vectorized memory access
+inline bool contiguous_block(const TensorIterator& iter) {
+  return iter.has_contiguous_first_dim() && (iter.is_trivial_1d() || iter.shape()[0] >= 128);
+}
+
 } // namespace modern
 
 template <typename func_t>
@@ -349,6 +355,21 @@ void gpu_kernel_impl(TensorIterator& iter, const func_t& f) {
   }
 
   int64_t numel = iter.numel();
+
+  if (contiguous_block(iter) && !iter.needs_dynamic_casting()) {
+    constexpr int num_threads = C10_WARP_SIZE * 2;
+    constexpr int thread_work_size = 4;
+    auto offset_calc = legacy::make_offset_calculator<ntensors, true>(iter);
+    if (iter.is_trivial_1d()) {
+      auto get_base_offset = [=] __device__ (int) { return 0; };
+      modern::launch_kernel<num_threads, thread_work_size>(numel, f, data, get_base_offset);
+    } else {
+      auto get_base_offset = [=] __device__ (int index) { return offset_calc.get(index); };
+      modern::launch_kernel<num_threads, thread_work_size>(numel, f, data, get_base_offset);
+    }
+    return;
+  }
+
   if (iter.is_trivial_1d()) {
     auto inner_strides = iter.get_inner_strides();
     at::detail::Array<int, ntensors> strides;
@@ -362,8 +383,6 @@ void gpu_kernel_impl(TensorIterator& iter, const func_t& f) {
         arg0_t result = legacy::invoke(f, &data.data[1], &strides.data[1], &dtypes.data[1], idx);
         c10::cast_and_store<arg0_t>(dtypes[0], out, result);
       });
-    } else if (iter.has_contiguous_first_dim()) {
-      modern::launch_kernel<C10_WARP_SIZE * 2, 4>(numel, f, data);
     } else {
       legacy::launch_kernel<launch_size_1d, 1>(numel, [=]GPU_LAMBDA(int idx) {
         arg0_t* out = (arg0_t*)(data[0] + strides[0] * idx);
