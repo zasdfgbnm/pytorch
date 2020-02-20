@@ -96,6 +96,7 @@ struct vectorized {
   static constexpr int loop_size = thread_work_size / vec_size;
 
   char *result_data;
+
   vectorized(char *result_data): result_data(result_data) {}
 
   template<typename accessor_t, typename scalar_t>
