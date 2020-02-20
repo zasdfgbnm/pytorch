@@ -152,11 +152,11 @@ __device__ inline void elementwise_kernel_helper(func_t f, char *result_data, ar
   using return_t = typename traits::result_type;
   using args_t = typename traits::ArgsTuple;
   constexpr int arity = traits::arity;
-  int idx = block_work_size * blockIdx.x;
+  int block_base_idx = block_work_size * blockIdx.x;
 
   // load
   args_t args[thread_work_size];
-  detail::static_unroll<load_with_policy, arity>::with_args(args, policy, idx);
+  detail::static_unroll<load_with_policy, arity>::with_args(args, policy, block_base_idx);
 
   // compute
   return_t results[thread_work_size];
@@ -166,9 +166,7 @@ __device__ inline void elementwise_kernel_helper(func_t f, char *result_data, ar
   }
 
   // store
-  auto result_accessor = [&] __device__ (int index) -> return_t & { return results[index]; };
-  return_t *result_base = reinterpret_cast<return_t *>(result_data) + idx;
-  policy.store(result_accessor, result_base);
+  policy.store(results, reinterpret_cast<return_t *>(result_data), block_base_idx);
 }
 
 template<int vec_size, typename func_t, typename array_t>

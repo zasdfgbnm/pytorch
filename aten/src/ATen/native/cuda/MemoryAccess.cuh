@@ -68,15 +68,15 @@ struct checked_unroll {
     }
   }
 
-  template<typename accessor_t, typename scalar_t>
-  __device__ inline void store(accessor_t from, scalar_t *to) {
+  template<typename scalar_t>
+  __device__ inline void store(scalar_t from[], scalar_t *base, int idx) {
     int thread_idx = threadIdx.x;
     #pragma unroll
     for (int i = 0; i < thread_work_size; i++) {
       if (thread_idx >= remaining) {
         return;
       }
-      to[thread_idx] = from(i);
+      to[base + block_base_idx + thread_idx] = from[i];
       thread_idx += num_threads;
     }
   }
@@ -108,17 +108,17 @@ struct vectorized {
     }
   }
 
-  template<typename accessor_t, typename scalar_t>
-  __device__ inline void store(accessor_t from, scalar_t *to) {
+  template<typename scalar_t>
+  __device__ inline void store(scalar_t from[], scalar_t *base, int block_base_idx) {
     using vec_t = aligned_vector<scalar_t, vec_size>;
-    vec_t *to_ = reinterpret_cast<vec_t *>(to);
+    vec_t *to_ = reinterpret_cast<vec_t *>(base + block_base_idx);
     int thread_idx = threadIdx.x;
     #pragma unroll
     for (int i = 0; i < loop_size; i++) {
       int index = thread_idx + i * num_threads;
       vec_t v;
       for (int j = 0; j < vec_size; j++) {
-        v.val[j] = from(vec_size * i + j);
+        v.val[j] = from[vec_size * i + j];
       }
       to_[index] = v;
     }
