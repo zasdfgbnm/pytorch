@@ -145,7 +145,8 @@ invoke(const func_t &f, char *const C10_RESTRICT data[], const index_t strides[]
 namespace modern {
 
 template<typename func_t, typename array_t, typename policy_t>
-__device__ inline void elementwise_kernel_helper(func_t f, array_t args_data, policy_t policy) {
+C10_LAUNCH_BOUNDS_1(num_threads)
+__global__ void elementwise_kernel(func_t f, array_t args_data, policy_t policy) {
   // Assumption:
   // 1. all tensors are contiguous, that is: stride == sizeof(type) for all tensors
   using traits = function_traits<func_t>;
@@ -169,19 +170,6 @@ __device__ inline void elementwise_kernel_helper(func_t f, array_t args_data, po
   policy.store(results, block_base_idx);
 }
 
-template<int vec_size, typename func_t, typename array_t>
-C10_LAUNCH_BOUNDS_1(num_threads)
-__global__ void elementwise_kernel(int N, func_t f, char *result_data, array_t args_data) {
-  using return_t = typename function_traits<func_t>::result_type;
-  int remaining = N - block_work_size * blockIdx.x;
-
-  if (remaining < block_work_size) {  // if this block handles the reminder, just do a naive unrolled loop
-    elementwise_kernel_helper(f, array_t args_data, typename memory::policies::checked_unroll(remaining, result_data));
-  } else {  // if this block has a full `block_work_size` data to handle, use vectorized memory access
-    elementwise_kernel_helper(f, array_t args_data, typename memory::policies::template vectorized<vec_size>(result_data));
-  }
-}
-
 // TODO (@zasdfgbnm): this function assume trivial 1d and no dynamic casting
 template<typename func_t, typename array_t>
 inline static void launch_kernel(int64_t N, const func_t& f, char *result_data, array_t args_data) {
@@ -194,13 +182,16 @@ inline static void launch_kernel(int64_t N, const func_t& f, char *result_data, 
   int vec_size = memory::can_vectorize_up_to<func_t>(result_data, args_data);
   switch (vec_size) {
   case 4:
-    elementwise_kernel<4, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, result_data, args_data);
+    auto policy = memory::vectorized_with_unrolled_tail<4>(N, result_data, args_data);
+    elementwise_kernel<<<grid, num_threads, 0, stream>>>(f, policy);
     break;
   case 2:
-    elementwise_kernel<2, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, result_data, args_data);
+    auto policy = memory::vectorized_with_unrolled_tail<2>(N, result_data, args_data);
+    elementwise_kernel<<<grid, num_threads, 0, stream>>>(f, policy);
     break;
   case 1:
-    elementwise_kernel<1, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, result_data, args_data);
+    auto policy = memory::vectorized_with_unrolled_tail<1>(N, result_data, args_data);
+    elementwise_kernel<<<grid, num_threads, 0, stream>>>(f, policy);
     break;
   default:
     TORCH_INTERNAL_ASSERT(false, "Unexpected vectorization size");
