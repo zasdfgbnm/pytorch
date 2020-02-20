@@ -144,119 +144,22 @@ invoke(const func_t &f, char *const C10_RESTRICT data[], const index_t strides[]
 // See the note for namespace legacy above.
 namespace modern {
 
-namespace detail {
-
-// The `pointers` converts std::tuple<T1, T2, ....> to std::tuple<T1*, T2*, ....>
-
-template <typename T>
-struct pointers_helper {};
-
-template <typename... types>
-struct pointers_helper<std::tuple<types...>> {
-  using type = std::tuple<types *...>;
-};
-
-template <typename T>
-using pointers = typename pointers_helper<T>::type;
-
-// What does the `static_unroll` do?
-//
-// We want to do something like:
-//
-//    using args_t = typename traits::ArgsTuple;
-//    args_t args;
-//    #pragma unroll
-//    for (int i = 0; i < traits::arity; i++) {
-//      std::get<i>(args) = ....
-//    }
-//
-// but unfortunately the above code does not work because
-// the template argument has to be a compile time constant
-// so `static_unroll` is created to simulate `#pragma unroll`
-// using template metaprogramming.
-
-template<template<int i> typename func, int end, int current=0>
-struct static_unroll {
-  template<typename... Args>
-  static inline C10_HOST_DEVICE void with_args(Args&&... args) {
-    func<current>::apply(std::forward<Args>(args)...);
-    static_unroll<func, end, current+1>::with_args(args...);
-  }
-};
-
-template<template<int i> typename func, int end>
-struct static_unroll<func, end, end> {
-  template<typename... Args>
-  static inline C10_HOST_DEVICE void with_args(Args... args) {}
-};
-
-template<int i>
-struct can_vectorize_up_to_helper {
-  template <typename array_t, typename traits>
-  static C10_HOST_DEVICE void apply(int &result, array_t pointers, traits _) {
-    using arg_t = typename traits::template arg<i>::type;
-    // `pointers` hold the data_ptr for tensors [output, input0, input1, ...], so we
-    // need a +1 offset to get the input
-    result = std::min(result, memory::can_vectorize_up_to<arg_t>(pointers[i + 1]));
-  }
-};
-
-template<typename func_t, typename array_t>
-inline int can_vectorize_up_to(array_t pointers) {
-  using traits = function_traits<func_t>;
-  using return_t = typename traits::result_type;
-  constexpr int arity = traits::arity;
-  int result = memory::can_vectorize_up_to<return_t>(pointers[0]);
-  // We need to get the type for each argument of `func_t`, this can only
-  // be done at compile time.
-  static_unroll<can_vectorize_up_to_helper, arity>::with_args(result, pointers, traits());
-  return result;
-}
-
-}  // namespace detail
-
-template<int i>
-struct compute_base_ptrs {
-  template <typename arg_ptrs, typename array_t>
-  static __device__ void apply(arg_ptrs &args_base, array_t data, int idx) {
-    // `data` hold the data_ptr for tensors [output, input0, input1, ...], so we
-    // need a +1 offset to get the input
-    std::get<i>(args_base) = reinterpret_cast<std::tuple_element_t<i, arg_ptrs>>(data[i + 1]) + idx;
-  }
-};
-
-template<int i>
-struct load_with_policy {
-  template <typename args_t, typename policy_t>
-  static __device__ void apply(args_t args[], policy_t policy, detail::pointers<args_t> args_base) {
-    using arg_t = std::tuple_element_t<i, args_t>;
-    auto args_accessor = [&args] __device__ (int index) -> arg_t & { return std::get<i>(args[index]); };
-    policy.load(args_accessor, std::get<i>(args_base));
-  }
-};
-
 template<typename func_t, typename array_t, typename policy_t>
-__device__ inline void elementwise_kernel_helper(func_t f, array_t data, policy_t policy) {
+__device__ inline void elementwise_kernel_helper(func_t f, char *result_data, array_t args_data, policy_t policy) {
   // Assumption:
   // 1. all tensors are contiguous, that is: stride == sizeof(type) for all tensors
   using traits = function_traits<func_t>;
   using return_t = typename traits::result_type;
   using args_t = typename traits::ArgsTuple;
   constexpr int arity = traits::arity;
-
-  // compute base pointers for this block
   int idx = block_work_size * blockIdx.x;
-  return_t *result_base = reinterpret_cast<return_t *>(data[0]) + idx;
-  detail::pointers<args_t> args_base;
-  detail::static_unroll<compute_base_ptrs, arity>::with_args(args_base, data, idx);
-
-  return_t results[thread_work_size];
-  args_t args[thread_work_size];
 
   // load
-  detail::static_unroll<load_with_policy, arity>::with_args(args, policy, args_base);
+  args_t args[thread_work_size];
+  detail::static_unroll<load_with_policy, arity>::with_args(args, policy, idx);
 
   // compute
+  return_t results[thread_work_size];
   #pragma unroll
   for (int i = 0; i < thread_work_size; i++) {
     results[i] = c10::guts::apply(f, args[i]);
@@ -264,41 +167,42 @@ __device__ inline void elementwise_kernel_helper(func_t f, array_t data, policy_
 
   // store
   auto result_accessor = [&] __device__ (int index) -> return_t & { return results[index]; };
+  return_t *result_base = reinterpret_cast<return_t *>(result_data) + idx;
   policy.store(result_accessor, result_base);
 }
 
 template<int vec_size, typename func_t, typename array_t>
 C10_LAUNCH_BOUNDS_1(num_threads)
-__global__ void elementwise_kernel(int N, func_t f, array_t data) {
+__global__ void elementwise_kernel(int N, func_t f, char *result_data, array_t args_data) {
   using return_t = typename function_traits<func_t>::result_type;
   int remaining = N - block_work_size * blockIdx.x;
 
   if (remaining < block_work_size) {  // if this block handles the reminder, just do a naive unrolled loop
-    elementwise_kernel_helper(f, data, typename memory::policies::checked_unroll(remaining));
+    elementwise_kernel_helper(f, char *result_data, array_t args_data, typename memory::policies::checked_unroll(remaining));
   } else {  // if this block has a full `block_work_size` data to handle, use vectorized memory access
-    elementwise_kernel_helper(f, data, typename memory::policies::template vectorized<vec_size>());
+    elementwise_kernel_helper(f, char *result_data, array_t args_data, typename memory::policies::template vectorized<vec_size>());
   }
 }
 
 // TODO (@zasdfgbnm): this function assume trivial 1d and no dynamic casting
 template<typename func_t, typename array_t>
-static void launch_kernel(int64_t N, const func_t& f, array_t data) {
+inline static void launch_kernel(int64_t N, const func_t& f, char *result_data, array_t args_data) {
   TORCH_INTERNAL_ASSERT(N >= 0 && N <= std::numeric_limits<int32_t>::max());
   if (N == 0) {
     return;
   }
   int64_t grid = (N + block_work_size - 1) / block_work_size;
   auto stream = at::cuda::getCurrentCUDAStream();
-  int vec_size = detail::can_vectorize_up_to<func_t>(data);
+  int vec_size = memory::can_vectorize_up_to<func_t>(result_data, args_data);
   switch (vec_size) {
   case 4:
-    elementwise_kernel<4, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, data);
+    elementwise_kernel<4, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, result_data, args_data);
     break;
   case 2:
-    elementwise_kernel<2, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, data);
+    elementwise_kernel<2, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, result_data, args_data);
     break;
   case 1:
-    elementwise_kernel<1, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, data);
+    elementwise_kernel<1, func_t, array_t><<<grid, num_threads, 0, stream>>>(N, f, result_data, args_data);
     break;
   default:
     TORCH_INTERNAL_ASSERT(false, "Unexpected vectorization size");
@@ -319,11 +223,26 @@ void gpu_kernel_impl(TensorIterator& iter, const func_t& f) {
   TORCH_INTERNAL_ASSERT(iter.ntensors() == traits::arity + 1);
 
   at::detail::Array<char*, ntensors> data;
+  #pragma unroll
   for (int i = 0; i < ntensors; i++) {
     data[i] = (char*)iter.data_ptr(i);
   }
 
+  // `data` is used in legacy code and `result_data` and `args_data`
+  // are used in modern code.
+  // This is ugly here right now, and we rely on compiler to optimize
+  // the generated code so that we don't create the array twice. But
+  // we choose to do so temporarily becasue legacy code will be removed
+  // eventually, and we will not have this issue.
+  char *result_data = data[0];
+  at::detail::Array<char*, ntensors> args_data;
+  #pragma unroll
+  for (int i = 0; i < traits::arity; i++) {
+    args_data[i] = data[i + 1];
+  }
+
   at::detail::Array<ScalarType, ntensors> dtypes;
+  #pragma unroll
   for (int i = 0; i < ntensors; i++) {
     dtypes[i] = iter.tensor(i).scalar_type();
   }
@@ -343,7 +262,7 @@ void gpu_kernel_impl(TensorIterator& iter, const func_t& f) {
         c10::cast_and_store<arg0_t>(dtypes[0], out, result);
       });
     } else if (iter.has_contiguous_first_dim()) {
-      modern::launch_kernel(numel, f, data);
+      modern::launch_kernel(numel, f, result_data, args_data);
     } else {
       legacy::launch_kernel<launch_size_1d, 1>(numel, [=]GPU_LAMBDA(int idx) {
         arg0_t* out = (arg0_t*)(data[0] + strides[0] * idx);
