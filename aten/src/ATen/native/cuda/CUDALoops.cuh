@@ -145,7 +145,7 @@ invoke(const func_t &f, char *const C10_RESTRICT data[], const index_t strides[]
 namespace modern {
 
 template<typename func_t, typename array_t, typename policy_t>
-__device__ inline void elementwise_kernel_helper(func_t f, char *result_data, array_t args_data, policy_t policy) {
+__device__ inline void elementwise_kernel_helper(func_t f, array_t args_data, policy_t policy) {
   // Assumption:
   // 1. all tensors are contiguous, that is: stride == sizeof(type) for all tensors
   using traits = function_traits<func_t>;
@@ -166,7 +166,7 @@ __device__ inline void elementwise_kernel_helper(func_t f, char *result_data, ar
   }
 
   // store
-  policy.store(results, reinterpret_cast<return_t *>(result_data), block_base_idx);
+  policy.store(results, block_base_idx);
 }
 
 template<int vec_size, typename func_t, typename array_t>
@@ -176,9 +176,9 @@ __global__ void elementwise_kernel(int N, func_t f, char *result_data, array_t a
   int remaining = N - block_work_size * blockIdx.x;
 
   if (remaining < block_work_size) {  // if this block handles the reminder, just do a naive unrolled loop
-    elementwise_kernel_helper(f, char *result_data, array_t args_data, typename memory::policies::checked_unroll(remaining));
+    elementwise_kernel_helper(f, array_t args_data, typename memory::policies::checked_unroll(remaining, result_data));
   } else {  // if this block has a full `block_work_size` data to handle, use vectorized memory access
-    elementwise_kernel_helper(f, char *result_data, array_t args_data, typename memory::policies::template vectorized<vec_size>());
+    elementwise_kernel_helper(f, array_t args_data, typename memory::policies::template vectorized<vec_size>(result_data));
   }
 }
 

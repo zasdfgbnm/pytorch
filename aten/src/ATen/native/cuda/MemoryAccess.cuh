@@ -52,8 +52,10 @@ namespace policies {
 struct checked_unroll {
 
   int remaining;
+  char *result_data;
 
-  __device__ checked_unroll(int remaining): remaining(remaining) {}
+  __device__ checked_unroll(int remaining, char *result_data)
+    :remaining(remaining), result_data(result_data) {}
 
   template<typename accessor_t, typename scalar_t>
   __device__ inline void load(accessor_t to, scalar_t *from) {
@@ -69,7 +71,8 @@ struct checked_unroll {
   }
 
   template<typename scalar_t>
-  __device__ inline void store(scalar_t from[], scalar_t *base, int idx) {
+  __device__ inline void store(scalar_t from[], int idx) {
+    scalar_t *base = reinterpret_cast<scalar_t *>(result_data);
     int thread_idx = threadIdx.x;
     #pragma unroll
     for (int i = 0; i < thread_work_size; i++) {
@@ -92,6 +95,9 @@ struct vectorized {
   static_assert(thread_work_size % vec_size == 0, "The workload per thread must be a multiple of vec_size");
   static constexpr int loop_size = thread_work_size / vec_size;
 
+  char *result_data;
+  vectorized(char *result_data): result_data(result_data) {}
+
   template<typename accessor_t, typename scalar_t>
   __device__ inline void load(accessor_t to, scalar_t *from) {
     using vec_t = aligned_vector<scalar_t, vec_size>;
@@ -109,8 +115,9 @@ struct vectorized {
   }
 
   template<typename scalar_t>
-  __device__ inline void store(scalar_t from[], scalar_t *base, int block_base_idx) {
+  __device__ inline void store(scalar_t from[], int block_base_idx) {
     using vec_t = aligned_vector<scalar_t, vec_size>;
+    scalar_t *base = reinterpret_cast<scalar_t *>(result_data);
     vec_t *to_ = reinterpret_cast<vec_t *>(base + block_base_idx);
     int thread_idx = threadIdx.x;
     #pragma unroll
