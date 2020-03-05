@@ -159,6 +159,78 @@ void distribution_nullary_kernel(at::TensorIterator& iter,
   AT_CUDA_CHECK(cudaGetLastError());
 }
 
+template<typename scalar_t,
+         int unroll_factor,
+         typename RNG,
+         typename func_t>
+void distribution_unary_kernel(at::TensorIterator& iter,
+                                 RNG* gen,
+                                 const func_t& functor) {
+  char* out_data = (char*)iter.data_ptr(0);
+  char* in_data = (char*)iter.data_ptr(1);
+
+  if (iter.is_trivial_1d()) {
+    auto strides = iter.get_inner_strides();
+    int stride0 = strides[0];
+    int stride1 = strides[1];
+    launch_kernel<unroll_factor>(iter, gen,
+      [=]__device__(curandStatePhilox4_32_10_t &state, int numel, int idx) {
+        scalar_t inputs[unroll_factor];
+
+        // load
+        #pragma unroll
+        for (int ii = 0; ii < unroll_factor; ii++) {
+          int li = idx + blockDim.x * gridDim.x * ii;
+          if (li < numel) {
+            inputs[ii] = (scalar_t*)&in_data[stride1 * li];
+          }
+        }
+
+        // compute & store
+        #pragma unroll
+        for (int ii = 0; ii < unroll_factor; ii++) {
+          int li = idx + blockDim.x * gridDim.x * ii;
+          scalar_t* out = (scalar_t*)&out_data[stride0 * li];
+          if (li < numel) {
+            *out = functor(state, inputs[ii]);
+          }
+        }
+      }
+    );
+  } else {
+    auto offset_calc = at::native::legacy::make_offset_calculator<2>(iter);
+    launch_kernel<unroll_factor>(iter, gen,
+      [=]__device__(curandStatePhilox4_32_10_t &state, int numel, int idx) {
+        using offsets_t = decltype(offset_calc.get(0));
+
+        offsets_t offsets[unroll_factor];
+        scalar_t inputs[unroll_factor];
+
+        // load
+        #pragma unroll
+        for (int ii = 0; ii < unroll_factor; ii++) {
+          int li = idx + blockDim.x * gridDim.x * ii;
+          offsets[ii] = offset_calc.get(li);
+          if (li < numel) {
+            inputs[ii] = (scalar_t*)&in_data[offsets[ii][0]];
+          }
+        }
+
+        // compute & store
+        #pragma unroll
+        for (int ii = 0; ii < unroll_factor; ii++) {
+          int li = idx + blockDim.x * gridDim.x * ii;
+          scalar_t* out = (scalar_t*)&out_data[offsets[ii][1]];
+          if (li < numel) {
+            *out = functor(state, inputs[ii]);
+          }
+        }
+      }
+    );
+  }
+  AT_CUDA_CHECK(cudaGetLastError());
+}
+
 } // namespace
 
 namespace at {
