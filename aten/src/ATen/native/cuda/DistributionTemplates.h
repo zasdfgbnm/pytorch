@@ -49,32 +49,50 @@ std::tuple<uint64_t, dim3, dim3> calc_execution_policy(int64_t total_elements) {
 }
 
 // grid stride loop kernel for distributions
-template<typename accscalar_t, int unroll_factor, typename dist_t, typename transform_t>
+template<int unroll_factor, typename func_t>
 C10_LAUNCH_BOUNDS_2(block_size_bound, grid_size_bound)
-__global__ void distribution_elementwise_grid_stride_kernel(int numel,
-                                                            std::pair<uint64_t, uint64_t> seeds,
-                                                            const dist_t dist_func,
-                                                            const transform_t transform_func) {
+__global__ void rand_kernel(int numel, std::pair<uint64_t, uint64_t> seeds, const func_t functor) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int block_size = blockDim.x * gridDim.x * unroll_factor;
   curandStatePhilox4_32_10_t state;
-  curand_init(
-      seeds.first,
-      idx,
-      seeds.second,
-      &state);
-  int rounded_size = ((numel - 1)/(blockDim.x * gridDim.x * unroll_factor)+1) *
-      blockDim.x * gridDim.x * unroll_factor;
-  for(int linear_index = idx; linear_index < rounded_size; linear_index += blockDim.x * gridDim.x * unroll_factor) {
-    auto rand = dist_func(&state);
-    #pragma unroll
-    for (int ii = 0; ii < unroll_factor; ii++) {
-      int li = linear_index + blockDim.x * gridDim.x * ii;
-      if (li < numel) {
-        transform_func(li, static_cast<accscalar_t>((&rand.x)[ii]));
-      }
-    }
+  curand_init(seeds.first, idx, seeds.second, &state);
+  int rounded_size = ((numel - 1)/block_size + 1) * block_size;
+  for(int linear_index = idx; linear_index < rounded_size; linear_index += block_size) {
+    functor(state, numel, linear_index);
     __syncthreads();
   }
+}
+
+template<int unroll_factor, typename RNG, typename func_t>
+void launch_kernel(at::TensorIterator& iter, RNG *gen, const func_t& functor) {
+  static_assert(unroll_factor >= 1, "unroll_factor must be >= 1.");
+
+  int64_t numel = iter.numel();
+  if (numel == 0) {
+    return;
+  }
+
+  if (!iter.can_use_32bit_indexing()) {
+    for (auto& sub_iter : iter.with_32bit_indexing()) {
+      launch_kernel<unroll_factor>(sub_iter, gen, functor);
+    }
+    return;
+  }
+
+  auto execution_policy = calc_execution_policy(numel);
+  auto counter_offset = std::get<0>(execution_policy);
+  auto grid = std::get<1>(execution_policy);
+  auto block = std::get<2>(execution_policy);
+  std::pair<uint64_t, uint64_t> rng_engine_inputs;
+  {
+    // See Note [Acquire lock when using random generators]
+    std::lock_guard<std::mutex> lock(gen->mutex_);
+    rng_engine_inputs = gen->philox_engine_inputs(counter_offset);
+  }
+
+  auto stream = at::cuda::getCurrentCUDAStream();
+  rand_kernel<unroll_factor><<<grid, block, 0, stream>>>(numel, rng_engine_inputs, functor);
+  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 /**
@@ -103,56 +121,38 @@ void distribution_nullary_kernel(at::TensorIterator& iter,
                                  RNG* gen,
                                  const dist_t& dist_func,
                                  const transform_t transform_func) {
-  static_assert(unroll_factor >= 1, "unroll_factor must be >= 1.");
-  int64_t numel = iter.numel();
-  if (numel == 0) {
-    return;
-  }
-
-  auto execution_policy = calc_execution_policy(numel);
-  auto counter_offset = std::get<0>(execution_policy);
-  auto grid = std::get<1>(execution_policy);
-  auto block = std::get<2>(execution_policy);
-  std::pair<uint64_t, uint64_t> rng_engine_inputs;
-  {
-    // See Note [Acquire lock when using random generators]
-    std::lock_guard<std::mutex> lock(gen->mutex_);
-    rng_engine_inputs = gen->philox_engine_inputs(counter_offset);
-  }
-
-  if (!iter.can_use_32bit_indexing()) {
-    for (auto& sub_iter : iter.with_32bit_indexing()) {
-      distribution_nullary_kernel<scalar_t, accscalar_t, unroll_factor>(sub_iter,
-        gen, dist_func, transform_func);
-    }
-    return;
-  }
-
   char* out_data = (char*)iter.data_ptr(0);
 
-  auto stream = at::cuda::getCurrentCUDAStream();
   if (iter.is_trivial_1d()) {
     auto strides = iter.get_inner_strides();
     int stride0 = strides[0];
-    distribution_elementwise_grid_stride_kernel<accscalar_t, unroll_factor><<<grid, block, 0, stream>>>(
-      numel,
-      rng_engine_inputs,
-      dist_func,
-      [=]__device__(int idx, accscalar_t rand) {
-        scalar_t* out = (scalar_t*)&out_data[stride0 * idx];
-        *out = transform_func(rand);
+    launch_kernel<unroll_factor>(iter, gen,
+      [=]__device__(curandStatePhilox4_32_10_t &state, int numel, int idx) {
+        auto rand = dist_func(&state);
+        #pragma unroll
+        for (int ii = 0; ii < unroll_factor; ii++) {
+          int li = idx + blockDim.x * gridDim.x * ii;
+          scalar_t* out = (scalar_t*)&out_data[stride0 * li];
+          if (li < numel) {
+            *out = transform_func(static_cast<accscalar_t>((&rand.x)[ii]));
+          }
+        }
       }
     );
   } else {
     auto offset_calc = at::native::legacy::make_offset_calculator<1>(iter);
-    distribution_elementwise_grid_stride_kernel<accscalar_t, unroll_factor><<<grid, block, 0, stream>>>(
-      numel,
-      rng_engine_inputs,
-      dist_func,
-      [=]__device__(int idx, accscalar_t rand) {
-        auto offsets = offset_calc.get(idx);
-        scalar_t* out = (scalar_t*)&out_data[offsets[0]];
-        *out = transform_func(rand);
+    launch_kernel<unroll_factor>(iter, gen,
+      [=]__device__(curandStatePhilox4_32_10_t &state, int numel, int idx) {
+        auto rand = dist_func(&state);
+        #pragma unroll
+        for (int ii = 0; ii < unroll_factor; ii++) {
+          int li = idx + blockDim.x * gridDim.x * ii;
+          auto offsets = offset_calc.get(li);
+          scalar_t* out = (scalar_t*)&out_data[offsets[0]];
+          if (li < numel) {
+            *out = transform_func(static_cast<accscalar_t>((&rand.x)[ii]));
+          }
+        }
       }
     );
   }
