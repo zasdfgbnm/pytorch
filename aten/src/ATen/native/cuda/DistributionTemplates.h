@@ -164,8 +164,8 @@ template<typename scalar_t,
          typename RNG,
          typename func_t>
 void distribution_unary_kernel(at::TensorIterator& iter,
-                                 RNG* gen,
-                                 const func_t& functor) {
+                               RNG* gen,
+                               const func_t& functor) {
   char* out_data = (char*)iter.data_ptr(0);
   char* in_data = (char*)iter.data_ptr(1);
 
@@ -182,7 +182,7 @@ void distribution_unary_kernel(at::TensorIterator& iter,
         for (int ii = 0; ii < unroll_factor; ii++) {
           int li = idx + blockDim.x * gridDim.x * ii;
           if (li < numel) {
-            inputs[ii] = (scalar_t*)&in_data[stride1 * li];
+            inputs[ii] = *(scalar_t*)&in_data[stride1 * li];
           }
         }
 
@@ -212,7 +212,7 @@ void distribution_unary_kernel(at::TensorIterator& iter,
           int li = idx + blockDim.x * gridDim.x * ii;
           offsets[ii] = offset_calc.get(li);
           if (li < numel) {
-            inputs[ii] = (scalar_t*)&in_data[offsets[ii][0]];
+            inputs[ii] = *(scalar_t*)&in_data[offsets[ii][0]];
           }
         }
 

@@ -46,26 +46,6 @@
 namespace {
 
 template <typename scalar_t>
-void poisson_cuda_kernel(
-    at::Tensor& ret,
-    const at::Tensor& lambda,
-    std::pair<uint64_t, uint64_t> seeds) {
-  at::cuda::CUDA_tensor_apply2<scalar_t, scalar_t>(
-      ret,
-      lambda,
-      [seeds] __device__(
-          scalar_t & ret_val, const scalar_t& lambda) {
-        curandStatePhilox4_32_10_t state;
-        curand_init(
-            seeds.first,
-            blockIdx.x * blockDim.x + threadIdx.x,
-            seeds.second,
-            &state);
-        ret_val = static_cast<scalar_t>(curand_poisson(&state, lambda));
-      });
-}
-
-template <typename scalar_t>
 void gamma_cuda_kernel(
     at::Tensor& ret,
     const at::Tensor& alpha,
@@ -139,15 +119,19 @@ namespace at { namespace native {
 
 Tensor _s_poisson_cuda(const Tensor& lambda, Generator* gen_) {
   auto gen = get_generator_or_default<CUDAGenerator>(gen_, cuda::detail::getDefaultCUDAGenerator());
-  std::pair<uint64_t, uint64_t> rng_engine_inputs;
-  {
-    // See Note [Acquire lock when using random generators]
-    std::lock_guard<std::mutex> lock(gen->mutex_);
-    rng_engine_inputs = gen->philox_engine_inputs(20);
-  }
   Tensor ret = at::empty(lambda.sizes(), lambda.options());
+
+  at::TensorIterator iter;
+  iter.add_output(ret);
+  iter.add_input(lambda);
+  iter.build();
+
   AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, ret.scalar_type(), "poisson_cuda", [&] {
-    poisson_cuda_kernel<scalar_t>(ret, lambda, rng_engine_inputs);
+    distribution_unary_kernel<scalar_t, 4>(iter, gen,
+      []__device__(curandStatePhilox4_32_10_t &state, scalar_t lambda) -> scalar_t {
+        return static_cast<scalar_t>(curand_poisson(&state, lambda));
+      }
+    );
   });
   return ret;
 }
