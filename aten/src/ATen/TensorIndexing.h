@@ -18,11 +18,37 @@ constexpr c10::nullopt_t None{c10::nullopt_t::init()};
 struct CAFFE2_API EllipsisIndexType final { EllipsisIndexType() {} };
 CAFFE2_API extern const EllipsisIndexType Ellipsis;
 
-namespace impl {
 struct CAFFE2_API Slice final {
  public:
-  Slice() {}
-  Slice(int64_t start, int64_t stop, int64_t step) : start_(start), stop_(stop), step_(step) {}
+  // This mirrors `__PySlice_Unpack` in torch/csrc/utils/python_compat.h
+  Slice(
+    c10::optional<int64_t> start_index = c10::nullopt,
+    c10::optional<int64_t> stop_index = c10::nullopt,
+    c10::optional<int64_t> step_index = c10::nullopt) {
+    if (!step_index.has_value()) {
+      step_ = 1;
+    } else {
+      step_ = step_index.value();
+      TORCH_CHECK_VALUE(step_ != 0, "slice step cannot be zero");
+
+      // Here step might be -INDEX_MAX-1; in this case we replace it
+      // with -INDEX_MAX.  This doesn't affect the semantics, and it
+      // guards against later undefined behaviour resulting from code that
+      // does "step = -step" as part of a slice reversal.
+      if (step_ < -INDEX_MAX)
+        step_ = -INDEX_MAX;
+    }
+    if (!start_index.has_value()) {
+      start_ = step_ < 0 ? INDEX_MAX : 0;
+    } else {
+      start_ = start_index.value();
+    }
+    if (!stop_index.has_value()) {
+      stop_ = step_ < 0 ? INDEX_MIN : INDEX_MAX;
+    } else {
+      stop_ = stop_index.value();
+    }
+  }
 
   inline int64_t start() const {
     return start_;
@@ -44,41 +70,8 @@ struct CAFFE2_API Slice final {
 
 CAFFE2_API std::ostream& operator<<(std::ostream& stream, const Slice& slice);
 
-// This mirrors `__PySlice_Unpack` in torch/csrc/utils/python_compat.h
-inline Slice unpackSlice(
-    c10::optional<int64_t> start_index,
-    c10::optional<int64_t> stop_index,
-    c10::optional<int64_t> step_index) {
-  int64_t start, stop, step;
-  if (!step_index.has_value()) {
-    step = 1;
-  } else {
-    step = step_index.value();
-    TORCH_CHECK_VALUE(step != 0, "slice step cannot be zero");
-
-    // Here step might be -INDEX_MAX-1; in this case we replace it
-    // with -INDEX_MAX.  This doesn't affect the semantics, and it
-    // guards against later undefined behaviour resulting from code that
-    // does "step = -step" as part of a slice reversal.
-    if (step < -INDEX_MAX)
-      step = -INDEX_MAX;
-  }
-  if (!start_index.has_value()) {
-    start = step < 0 ? INDEX_MAX : 0;
-  } else {
-    start = start_index.value();
-  }
-  if (!stop_index.has_value()) {
-    stop = step < 0 ? INDEX_MIN : INDEX_MAX;
-  } else {
-    stop = stop_index.value();
-  }
-  return Slice(start, stop, step);
-}
-} // namespace impl
-
 // `at::indexing::TensorIndex` is used for converting C++ tensor indices such as
-// `{None, "...", Ellipsis, 0, true, {1, None, 2}, torch::tensor({1, 2})}`
+// `{None, "...", Ellipsis, 0, true, Slice(1, None, 2), torch::tensor({1, 2})}`
 // into its equivalent `std::vector<TensorIndex>`, so that further tensor indexing
 // operations can be performed using the supplied indices.
 //
@@ -90,17 +83,17 @@ inline Slice unpackSlice(
 // `...`                   | `"..."`
 // `123`                   | `123`
 // `True` / `False`        | `true` / `false`
-// `:`                     | `{}` / `{None, None}`
-// `::`                    | `{}` / `{None, None, None}`
-// `1:`                    | `{1, None}`
-// `1::`                   | `{1, None, None}`
-// `:3`                    | `{None, 3}`
-// `:3:`                   | `{None, 3, None}`
-// `::2`                   | `{None, None, 2}`
-// `1:3`                   | `{1, 3}`
-// `1::2`                  | `{1, None, 2}`
-// `:3:2`                  | `{None, 3, 2}`
-// `1:3:2`                 | `{1, 3, 2}`
+// `:`                     | `Slice()` / `Slice(None, None)`
+// `::`                    | `Slice()` / `Slice(None, None, None)`
+// `1:`                    | `Slice(1, None)`
+// `1::`                   | `Slice(1, None, None)`
+// `:3`                    | `Slice(None, 3)`
+// `:3:`                   | `Slice(None, 3, None)`
+// `::2`                   | `Slice(None, None, 2)`
+// `1:3`                   | `Slice(1, 3)`
+// `1::2`                  | `Slice(1, None, 2)`
+// `:3:2`                  | `Slice(None, 3, 2)`
+// `1:3:2`                 | `Slice(1, 3, 2)`
 // `torch.tensor([1, 2])`) | `torch::tensor({1, 2})`
 struct CAFFE2_API TensorIndex final {
   // Case 1: `at::indexing::None`
@@ -123,26 +116,11 @@ struct CAFFE2_API TensorIndex final {
             class = typename std::enable_if<std::is_same<bool, T>::value>::type >
   TensorIndex(T boolean) : boolean_(boolean), type_(TensorIndexType::Boolean) {}
 
-  // Case 5: Slice represented in `{start, stop, step}` form,
-  // where `start` / `stop` / `step` can be integer or `at::indexing::None`
-  TensorIndex(std::initializer_list<c10::optional<int64_t>> slice) : type_(TensorIndexType::Slice) {
-    if (slice.size() == 0) {
-      slice_ = impl::unpackSlice(c10::nullopt, c10::nullopt, c10::nullopt);
-    } else if (slice.size() == 2) {
-      slice_ = impl::unpackSlice(*slice.begin(), *(slice.begin() + 1), c10::nullopt);
-    } else if (slice.size() == 3) {
-      slice_ = impl::unpackSlice(*slice.begin(), *(slice.begin() + 1), *(slice.begin() + 2));
-    } else {
-      TORCH_CHECK_VALUE(
-        false,
-        "Expected 0 / 2 / 3 elements in the braced-init-list to represent a slice index, but got ",
-        slice.size(),
-        " element(s)");
-    }
-  }
+  // Case 5: Slice represented in `at::indexing::Slice` form
+  TensorIndex(Slice slice) : slice_(std::move(slice)), type_(TensorIndexType::Slice) {}
 
-  // Case 5: Tensor value
-  TensorIndex(Tensor tensor) : tensor_(tensor), type_(TensorIndexType::Tensor) {}
+  // Case 6: Tensor value
+  TensorIndex(Tensor tensor) : tensor_(std::move(tensor)), type_(TensorIndexType::Tensor) {}
 
   inline bool is_none() const {
     return type_ == TensorIndexType::None;
@@ -172,7 +150,7 @@ struct CAFFE2_API TensorIndex final {
     return type_ == TensorIndexType::Slice;
   }
 
-  inline const impl::Slice& slice() const {
+  inline const Slice& slice() const {
     return slice_;
   }
 
@@ -187,7 +165,7 @@ struct CAFFE2_API TensorIndex final {
  private:
   int64_t integer_;
   bool boolean_;
-  impl::Slice slice_;
+  Slice slice_;
   Tensor tensor_;
   TensorIndexType type_;
 };
@@ -439,10 +417,12 @@ static inline Tensor applySlicing(
   int64_t dim = 0;
   int64_t specified_dims = impl::count_specified_dimensions(indices);
 
-  TORCH_CHECK_INDEX(specified_dims <= self_sizes.size(), "too many indices for tensor of dimension ", (int)self_sizes.size());
+  TORCH_CHECK_INDEX(
+    specified_dims <= (int64_t)self_sizes.size(),
+    "too many indices for tensor of dimension ", (int)self_sizes.size());
 
   Tensor result = self;
-  for (int64_t i = 0; i < indices.size(); i++) {
+  for (size_t i = 0; i < indices.size(); i++) {
     auto& obj = indices[i];
     result = handleDimInMultiDimIndexing(
       /*prev_dim_result=*/result,
