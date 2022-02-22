@@ -195,6 +195,8 @@ static const char* expr_type2string(ExprType t) {
       return "GatherOp";
     case ExprType::ViewOp:
       return "ViewOp";
+    case ExprType::ViewAsRealOp:
+      return "ViewAsRealOp";
     case ExprType::Split:
       return "Split";
     case ExprType::Merge:
@@ -817,6 +819,10 @@ size_t dataTypeSize(DataType type) {
   switch (type) {
     case DataType::Bool:
       return sizeof(bool);
+    case DataType::ComplexDouble:
+      return sizeof(std::complex<double>);
+    case DataType::ComplexFloat:
+      return sizeof(std::complex<float>);
     case DataType::Double:
       return sizeof(double);
     case DataType::Float:

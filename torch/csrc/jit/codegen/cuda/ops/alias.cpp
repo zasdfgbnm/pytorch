@@ -109,6 +109,22 @@ TensorView* unsqueeze(TensorView* x, int dim) {
   return broadcast(x, broadcast_axes);
 }
 
+TensorView* view_as_real(TensorView* x) {
+  TORCH_INTERNAL_ASSERT(
+      x->getDataType() == DataType::ComplexDouble ||
+      x->getDataType() == DataType::ComplexFloat);
+
+  DataType dtype = DataType::Null;
+  if (x->getDataType() == DataType::ComplexDouble) {
+    dtype = DataType::Double;
+  } else {
+    dtype = DataType::Float;
+  }
+  auto tv = IrBuilder::create<TensorView>(x->container(), x->domain(), dtype);
+  tv->domain()->appendTwo();
+  return tv;
+}
+
 } // namespace cuda
 } // namespace fuser
 } // namespace jit

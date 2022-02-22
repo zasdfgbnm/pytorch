@@ -128,6 +128,10 @@ void IrCloner::handle(const ViewOp* op) {
   clone_ = IrBuilder::clone(op, this);
 }
 
+void IrCloner::handle(const ViewAsRealOp* op) {
+  clone_ = IrBuilder::clone(op, this);
+}
+
 void IrCloner::handle(const Split* split) {
   clone_ = IrBuilder::clone(split, this);
 }

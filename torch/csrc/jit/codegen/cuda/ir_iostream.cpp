@@ -480,6 +480,10 @@ void IrPrinter::handle(const ViewOp* top) {
   indent() << top->out() << " = view( " << top->in() << " )\n";
 }
 
+void IrPrinter::handle(const ViewAsRealOp* top) {
+  indent() << top->out() << " = view_as_real( " << top->in() << " )\n";
+}
+
 void IrPrinter::handle(const kir::Predicate* node) {
   switch (node->predicate_type()) {
     case PredicateType::Inline: {

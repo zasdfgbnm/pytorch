@@ -92,6 +92,7 @@ enum class ExprType {
   ShiftOp,
   GatherOp,
   ViewOp,
+  ViewAsRealOp,
   Split,
   Merge,
   Allocate,

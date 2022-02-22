@@ -32,6 +32,8 @@ TORCH_CUDA_CU_API TensorView* squeeze(
 
 TORCH_CUDA_CU_API TensorView* unsqueeze(TensorView* x, int dim);
 
+TORCH_CUDA_CU_API TensorView* view_as_real(TensorView* x);
+
 } // namespace cuda
 } // namespace fuser
 } // namespace jit

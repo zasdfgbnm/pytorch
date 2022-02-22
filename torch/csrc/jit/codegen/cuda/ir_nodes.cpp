@@ -738,6 +738,20 @@ ViewOp::ViewOp(const ViewOp* src, IrCloner* ir_cloner)
       out_(ir_cloner->clone(src->out_)),
       in_(ir_cloner->clone(src->in_)) {}
 
+ViewAsRealOp::ViewAsRealOp(
+    IrBuilderPasskey passkey,
+    TensorView* out,
+    TensorView* in)
+    : Expr(passkey, ExprType::ViewAsRealOp), out_(out), in_(in) {
+  addOutput(out);
+  addInput(in);
+}
+
+ViewAsRealOp::ViewAsRealOp(const ViewAsRealOp* src, IrCloner* ir_cloner)
+    : Expr(src, ir_cloner),
+      out_(ir_cloner->clone(src->out_)),
+      in_(ir_cloner->clone(src->in_)) {}
+
 IterDomain::IterDomain(
     IrBuilderPasskey passkey,
     Val* start,
@@ -1481,6 +1495,14 @@ TensorDomain* TensorDomain::view(
     const std::vector<std::shared_ptr<ViewTransform>>& transforms) {
   TORCH_INTERNAL_ASSERT(nDims() > 0, "Tried to view transform a 0-dim domain");
   return transformView(this, transforms);
+}
+
+void TensorDomain::appendTwo() {
+  domain_.insert(
+      domain_.end(),
+      IrBuilder::create<IterDomain>(
+          FusionGuard::getCurFusion()->zeroVal(), IrBuilder::create<Int>(2)));
+  resetDomains();
 }
 
 // TODO: Rfactor a Welford

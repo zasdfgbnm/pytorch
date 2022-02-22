@@ -306,6 +306,19 @@ void OptOutMutator::mutate(ViewOp* vop) {
   IrBuilder::create<ViewOp>(container, out, in);
 }
 
+void OptOutMutator::mutate(ViewAsRealOp* vop) {
+  TensorView* out = maybeMutated(vop->out())->as<TensorView>();
+  TensorView* in = maybeMutated(vop->in())->as<TensorView>();
+
+  if (out->sameAs(vop->out()) && in->sameAs(vop->in())) {
+    return;
+  }
+
+  auto container = vop->container();
+  container->removeExpr(vop);
+  IrBuilder::create<ViewAsRealOp>(container, out, in);
+}
+
 void OptOutMutator::mutate(Split* s) {
   IterDomain* ot = maybeMutated(s->outer())->as<IterDomain>();
   IterDomain* inr = maybeMutated(s->inner())->as<IterDomain>();

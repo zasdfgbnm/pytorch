@@ -126,6 +126,9 @@ void Expr::dispatch(T handler, Expr* expr) {
     case ExprType::ViewOp:
       ptr(handler)->handle(expr->as<ViewOp>());
       return;
+    case ExprType::ViewAsRealOp:
+      ptr(handler)->handle(expr->as<ViewAsRealOp>());
+      return;
 
     case ExprType::Allocate:
       ptr(handler)->handle(expr->as<kir::Allocate>());
@@ -254,6 +257,9 @@ void Expr::constDispatch(T handler, const Expr* expr) {
       return;
     case ExprType::ViewOp:
       ptr(handler)->handle(expr->as<ViewOp>());
+      return;
+    case ExprType::ViewAsRealOp:
+      ptr(handler)->handle(expr->as<ViewAsRealOp>());
       return;
 
     case ExprType::Allocate:
@@ -394,6 +400,9 @@ void Expr::mutatorDispatch(T mutator, Expr* expr) {
       return;
     case ExprType::ViewOp:
       ptr(mutator)->mutate(expr->as<ViewOp>());
+      return;
+    case ExprType::ViewAsRealOp:
+      ptr(mutator)->mutate(expr->as<ViewAsRealOp>());
       return;
 
     case ExprType::Allocate:
@@ -600,6 +609,9 @@ void OptOutConstDispatch::handle(const GatherOp* stmt) {
 void OptOutConstDispatch::handle(const ViewOp* stmt) {
   unhandled(stmt);
 }
+void OptOutConstDispatch::handle(const ViewAsRealOp* stmt) {
+  unhandled(stmt);
+}
 
 void OptOutConstDispatch::handle(const kir::Allocate* stmt) {
   unhandled(stmt);
@@ -700,6 +712,9 @@ void OptOutDispatch::handle(GatherOp* stmt) {
   unhandled(stmt);
 }
 void OptOutDispatch::handle(ViewOp* stmt) {
+  unhandled(stmt);
+}
+void OptOutDispatch::handle(ViewAsRealOp* stmt) {
   unhandled(stmt);
 }
 

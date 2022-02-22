@@ -92,6 +92,7 @@ class TORCH_CUDA_CU_API IrPrinter : public OptInConstDispatch {
   void handle(const ShiftOp*) final;
   void handle(const GatherOp*) final;
   void handle(const ViewOp*) final;
+  void handle(const ViewAsRealOp*) final;
 
   void handle(const kir::Predicate*) final;
   void handle(const kir::TensorIndex*) final;

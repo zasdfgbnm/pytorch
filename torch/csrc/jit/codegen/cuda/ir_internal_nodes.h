@@ -448,6 +448,25 @@ class TORCH_CUDA_CU_API ViewOp : public Expr {
   TensorView* const in_ = nullptr;
 };
 
+class TORCH_CUDA_CU_API ViewAsRealOp : public Expr {
+ public:
+  ViewAsRealOp(IrBuilderPasskey, TensorView* out, TensorView* in);
+
+  ViewAsRealOp(const ViewAsRealOp* src, IrCloner* ir_cloner);
+
+  TensorView* out() const {
+    return out_;
+  }
+
+  TensorView* in() const {
+    return in_;
+  }
+
+ private:
+  TensorView* const out_ = nullptr;
+  TensorView* const in_ = nullptr;
+};
+
 // Friends for direct access to split
 class TensorDomain;
 class ReplayTransformations;
@@ -825,6 +844,8 @@ class TORCH_CUDA_CU_API TensorDomain : public Val {
   // Transform TensorView according to merge and split transformations
   TensorDomain* view(
       const std::vector<std::shared_ptr<ViewTransform>>& transforms);
+
+  void appendTwo();
 
   static std::vector<IterDomain*> orderedAs(
       const std::vector<IterDomain*>& td,
