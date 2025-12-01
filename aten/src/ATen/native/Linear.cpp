@@ -83,30 +83,74 @@ static inline Tensor _flatten_nd_linear(const Tensor& input, const Tensor& weigh
 
 
 Tensor linear(const Tensor& input, const Tensor& weight, const std::optional<Tensor>& bias_opt) {
+  std::cout << "\n========== LINEAR FUNCTION DEBUG ==========" << std::endl;
+  std::cout << "[DEBUG] Linear function called" << std::endl;
+  
   // _matmul_impl checks this again later, but _flatten_nd_linear does not work on scalars inputs,
   // so let's try to catch this here already
   const auto input_dim = input.dim();
   const auto weight_dim = weight.dim();
+  
+  std::cout << "[DEBUG] Input dimension: " << input_dim << std::endl;
+  std::cout << "[DEBUG] Weight dimension: " << weight_dim << std::endl;
+  std::cout << "[DEBUG] Input shape: " << input.sizes() << std::endl;
+  std::cout << "[DEBUG] Weight shape: " << weight.sizes() << std::endl;
+  std::cout << "[DEBUG] Input dtype: " << input.dtype() << std::endl;
+  std::cout << "[DEBUG] Weight dtype: " << weight.dtype() << std::endl;
+  std::cout << "[DEBUG] Input device: " << input.device() << std::endl;
+  std::cout << "[DEBUG] Weight device: " << weight.device() << std::endl;
+  std::cout << "[DEBUG] Input layout: " << input.layout() << std::endl;
+  std::cout << "[DEBUG] Weight layout: " << weight.layout() << std::endl;
+  std::cout << "[DEBUG] Input is_contiguous: " << input.is_contiguous() << std::endl;
+  std::cout << "[DEBUG] Weight is_contiguous: " << weight.is_contiguous() << std::endl;
+  
   TORCH_CHECK(input_dim != 0 && weight_dim != 0,
               "both arguments to linear need to be at least 1D, but they are ",
               input_dim, "D and ", weight_dim, "D");
+  std::cout << "[DEBUG] Dimension check passed" << std::endl;
 
   // See [Note: hacky wrapper removal for optional tensor]
   auto bias = bias_opt.has_value()
     ? c10::MaybeOwned<Tensor>::borrowed(*bias_opt)
     : c10::MaybeOwned<Tensor>::owned(std::in_place);
-  if (input.is_mkldnn()) {
-    return at::mkldnn_linear(input, weight, *bias);
+  
+  std::cout << "[DEBUG] Bias defined: " << bias->defined() << std::endl;
+  if (bias->defined()) {
+    std::cout << "[DEBUG] Bias shape: " << bias->sizes() << std::endl;
+    std::cout << "[DEBUG] Bias dtype: " << bias->dtype() << std::endl;
+    std::cout << "[DEBUG] Bias device: " << bias->device() << std::endl;
+    std::cout << "[DEBUG] Bias is_contiguous: " << bias->is_contiguous() << std::endl;
   }
+  
+  if (input.is_mkldnn()) {
+    std::cout << "[DEBUG] Taking MKLDNN path" << std::endl;
+    auto result = at::mkldnn_linear(input, weight, *bias);
+    std::cout << "[DEBUG] MKLDNN result shape: " << result.sizes() << std::endl;
+    std::cout << "========== LINEAR FUNCTION END ==========\n" << std::endl;
+    return result;
+  }
+  std::cout << "[DEBUG] Not using MKLDNN" << std::endl;
+  
 #if defined(C10_MOBILE)
   if (xnnpack::use_linear(input, weight, *bias)) {
-    return xnnpack::linear(input, weight, *bias);
+    std::cout << "[DEBUG] Taking XNNPACK path" << std::endl;
+    auto result = xnnpack::linear(input, weight, *bias);
+    std::cout << "[DEBUG] XNNPACK result shape: " << result.sizes() << std::endl;
+    std::cout << "========== LINEAR FUNCTION END ==========\n" << std::endl;
+    return result;
   }
+  std::cout << "[DEBUG] Not using XNNPACK" << std::endl;
 #endif
+
   if (input_dim == 2 && bias->defined()) {
     // Fused op is marginally faster.
-    return at::addmm(*bias, input, weight.t());
+    std::cout << "[DEBUG] Taking 2D addmm fused path (input_dim=2 and bias defined)" << std::endl;
+    auto result = at::addmm(*bias, input, weight.t());
+    std::cout << "[DEBUG] addmm result shape: " << result.sizes() << std::endl;
+    std::cout << "========== LINEAR FUNCTION END ==========\n" << std::endl;
+    return result;
   }
+  std::cout << "[DEBUG] Not taking 2D addmm path (input_dim=" << input_dim << ", bias_defined=" << bias->defined() << ")" << std::endl;
 
   const auto is_bias_likely_fusable = (
       bias->defined() &&
@@ -118,27 +162,61 @@ Tensor linear(const Tensor& input, const Tensor& weight, const std::optional<Ten
       // flattening optimization.
       ((bias->dim() == 1 || bias->squeeze().dim() == 1) && bias->is_contiguous_or_false())
   );
+  std::cout << "[DEBUG] is_bias_likely_fusable: " << is_bias_likely_fusable << std::endl;
+  std::cout << "[DEBUG] input.is_xla(): " << input.is_xla() << std::endl;
+  
   if (is_bias_likely_fusable && !input.is_xla()) {
     // Also hit the fused path for contiguous nD input, if not using xla
     // backend. Reshaping/flattening has some performance implications on xla.
+    std::cout << "[DEBUG] Checking flatten_nd_linear conditions..." << std::endl;
+    std::cout << "[DEBUG] input.is_contiguous_or_false(): " << input.is_contiguous_or_false() << std::endl;
+    
     if (input.is_contiguous_or_false()) {
-      return _flatten_nd_linear(input, weight, *bias);
+      std::cout << "[DEBUG] Taking _flatten_nd_linear path (contiguous input)" << std::endl;
+      auto result = _flatten_nd_linear(input, weight, *bias);
+      std::cout << "[DEBUG] _flatten_nd_linear result shape: " << result.sizes() << std::endl;
+      std::cout << "========== LINEAR FUNCTION END ==========\n" << std::endl;
+      return result;
     } else if (parseLinearFlatten3d()) {
+      std::cout << "[DEBUG] Taking _flatten_nd_linear path (TORCH_LINEAR_FLATTEN_3D enabled)" << std::endl;
       // If user forces flattening via env var
       const Tensor input_cont = input.contiguous();
-      return _flatten_nd_linear(input_cont, weight, *bias);
+      std::cout << "[DEBUG] Made input contiguous" << std::endl;
+      auto result = _flatten_nd_linear(input_cont, weight, *bias);
+      std::cout << "[DEBUG] _flatten_nd_linear result shape: " << result.sizes() << std::endl;
+      std::cout << "========== LINEAR FUNCTION END ==========\n" << std::endl;
+      return result;
     }
   }
+  
+  std::cout << "[DEBUG] Taking general matmul path" << std::endl;
+  std::cout << "[DEBUG] Computing matmul(input, weight.t())" << std::endl;
   auto output = at::matmul(input, weight.t());
+  std::cout << "[DEBUG] matmul output shape: " << output.sizes() << std::endl;
+  
   if (bias->defined()) {
+    std::cout << "[DEBUG] Adding bias to output" << std::endl;
+    std::cout << "[DEBUG] isTensorSubclassLike(*bias): " << isTensorSubclassLike(*bias) << std::endl;
+    std::cout << "[DEBUG] bias->_fw_grad(0).defined(): " << bias->_fw_grad(/*level*/ 0).defined() << std::endl;
+    
     // for composite compliance use out-of-place version of `add`
     if (isTensorSubclassLike(*bias) ||
         bias->_fw_grad(/*level*/ 0).defined()) {
+      std::cout << "[DEBUG] Using out-of-place add" << std::endl;
       output = at::add(output, *bias);
     } else {
+      std::cout << "[DEBUG] Using in-place add_" << std::endl;
       output.add_(*bias);
     }
+    std::cout << "[DEBUG] After bias addition, output shape: " << output.sizes() << std::endl;
+  } else {
+    std::cout << "[DEBUG] No bias to add" << std::endl;
   }
+  
+  std::cout << "[DEBUG] Final output shape: " << output.sizes() << std::endl;
+  std::cout << "[DEBUG] Final output dtype: " << output.dtype() << std::endl;
+  std::cout << "[DEBUG] Final output device: " << output.device() << std::endl;
+  std::cout << "========== LINEAR FUNCTION END ==========\n" << std::endl;
   return output;
 }
 
