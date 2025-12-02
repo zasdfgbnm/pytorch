@@ -32,7 +32,8 @@ def run_test(description, create_tensors_fn):
         
         print(f"  input: shape={input.shape}, device={input.device}, dtype={input.dtype}")
         print(f"  weight: shape={weight.shape}, device={weight.device}, dtype={weight.dtype}")
-        print(f"  input.key_set: {input.key_set()}")
+        print(f"  input.requires_grad: {input.requires_grad}")
+        print(f"  weight.requires_grad: {weight.requires_grad}")
         
         print(f"  Calling F.linear...")
         sys.stdout.flush()
