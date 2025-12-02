@@ -27,6 +27,7 @@
 #include <c10/util/irange.h>
 #include <variant>
 #include <iostream>
+#include <c10/core/impl/LocalDispatchKeySet.h>
 
 #ifndef AT_PER_OPERATOR_HEADERS
 #include <ATen/Functions.h>
@@ -2201,8 +2202,24 @@ static Tensor _matmul_impl(
         
         // Try calling at::mm instead of tensor.mm() to see if that helps
         std::cout << "[DEBUG _matmul_impl] Calling at::mm(t1_folded, *t2) instead..." << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t1_folded.key_set() = " << t1_folded.key_set() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t2->key_set() = " << t2->key_set() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t1_folded.has_storage() = " << t1_folded.has_storage() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t2->has_storage() = " << t2->has_storage() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t1_folded.is_python_dispatch() = " << t1_folded.key_set().has(c10::DispatchKey::Python) << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t2->is_python_dispatch() = " << t2->key_set().has(c10::DispatchKey::Python) << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t1_folded.unsafeGetTensorImpl() = " << t1_folded.unsafeGetTensorImpl() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t2->unsafeGetTensorImpl() = " << t2->unsafeGetTensorImpl() << std::endl;
         std::cout.flush();
+        
+        std::cout << "[DEBUG _matmul_impl] Now calling at::mm..." << std::endl;
+        std::cout.flush();
+        std::cerr << "[DEBUG _matmul_impl] STDERR: Now calling at::mm..." << std::endl;
+        std::cerr.flush();
+        
         auto mm_result = at::mm(t1_folded, *t2);
+        
+        std::cout << "[DEBUG _matmul_impl] at::mm RETURNED!" << std::endl;
         
         std::cout << "[DEBUG _matmul_impl] should_fold: at::mm() returned!" << std::endl;
         std::cout << "[DEBUG _matmul_impl] should_fold: mm_result shape = " << mm_result.sizes() << std::endl;
