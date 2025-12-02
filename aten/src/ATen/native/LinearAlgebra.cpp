@@ -2244,16 +2244,34 @@ static Tensor _matmul_impl(
         
         std::cout << "[DEBUG _matmul_impl] should_fold: at::mm() returned!" << std::endl;
         std::cout << "[DEBUG _matmul_impl] should_fold: mm_result shape = " << mm_result.sizes() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: output_shape = " << output_shape << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: About to call at::_unsafe_view..." << std::endl;
+        std::cout.flush();
+        std::cerr << "[DEBUG _matmul_impl] STDERR: About to call at::_unsafe_view..." << std::endl;
+        std::cerr.flush();
         
-        const auto output = at::_unsafe_view(mm_result, output_shape);
+        at::Tensor output;
+        if (mm_result.device().is_meta()) {
+          std::cout << "[DEBUG _matmul_impl] should_fold: mm_result is meta, using reshape instead of _unsafe_view..." << std::endl;
+          output = mm_result.reshape(output_shape);
+          std::cout << "[DEBUG _matmul_impl] should_fold: reshape completed!" << std::endl;
+        } else {
+          output = at::_unsafe_view(mm_result, output_shape);
+          std::cout << "[DEBUG _matmul_impl] should_fold: _unsafe_view completed!" << std::endl;
+        }
         
-        std::cout << "[DEBUG _matmul_impl] should_fold: _unsafe_view completed" << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: view/reshape done!" << std::endl;
         std::cout << "[DEBUG _matmul_impl] should_fold: output shape = " << output.sizes() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: transpose = " << transpose << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: About to return..." << std::endl;
+        std::cout.flush();
         // This copies if we perform a 2D @ 3D and the first tensor requires_grad
         // See should_fold for why.
         // If mm_out were differentiable, we could use it here, and pass a result with the
         // correct strides to avoid this unnecessary copy.
-        return transpose ? output.mT().contiguous() : output;
+        auto result = transpose ? output.mT().contiguous() : output;
+        std::cout << "[DEBUG _matmul_impl] should_fold: Returning result with shape = " << result.sizes() << std::endl;
+        return result;
       } else {
         std::cout << "[DEBUG _matmul_impl] should_fold: calling mv() (no out)" << std::endl;
         auto result = at::_unsafe_view(t1_folded.mv(*t2), output_shape);
