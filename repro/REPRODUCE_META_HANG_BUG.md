@@ -2,11 +2,13 @@
 
 ## Bug Description
 
-When calling `torch.matmul()` or `at::mm()` on plain meta tensors with autograd enabled, the program hangs indefinitely in the C++ dispatcher. The hang occurs:
+When calling `torch.matmul()` or `at::mm()` on plain meta tensors with autograd enabled, under certain conditions the program can hang indefinitely in the C++ dispatcher. The hang occurs:
 
 - **Before** any implementation is reached (neither C++ nor Python meta kernels)
 - **In the dispatcher** itself, somewhere between the function call and kernel dispatch
 - **Only when** the should_fold optimization path is triggered (e.g., 3D × 2D matmul)
+
+**Note:** This bug was observed in a specific build/environment. The reproducers in this directory may not trigger the hang in a vanilla PyTorch build, but they document the issue and test various scenarios.
 
 ### Dispatch Keys Involved
 
@@ -18,39 +20,37 @@ The presence of `AutogradMeta` appears to be the key issue.
 
 ## Reproducer Files
 
-### 1. `reproduce_meta_mm_hang.py`
-Simple minimal reproducer that demonstrates the hang.
+### 1. `reproduce_linear_meta_hang.py`
+Tests `F.linear` with meta tensors - the actual use case where the hang was observed.
 
 **Usage:**
 ```bash
-python reproduce_meta_mm_hang.py
-```
-
-**Expected behavior:** Test 2 will hang. Press Ctrl+C after a few seconds.
-
-### 2. `reproduce_meta_mm_hang_detailed.py`
-Detailed version with more diagnostic information and automatic timeout.
-
-**Usage:**
-```bash
-python reproduce_meta_mm_hang_detailed.py
-```
-
-**Expected behavior:** Will timeout after 5 seconds and print diagnostic info.
-
-### 3. `test_meta_vs_fake_tensor.py`
-Comparative test to check different scenarios.
-
-**Usage:**
-```bash
-python test_meta_vs_fake_tensor.py
+python repro/reproduce_linear_meta_hang.py
 ```
 
 **Tests:**
-- Plain meta tensors (3D × 2D) - **HANGS**
-- FakeTensor mode (3D × 2D) - May work if FakeTensor has workarounds
-- Plain meta + no_grad - May work if autograd is the issue
-- Plain meta (2D × 2D) - Works (doesn't trigger folding)
+- F.linear with 2D, 3D, and 4D inputs on meta device
+- With and without torch.no_grad()
+- Matches the original scenario that triggered the bug
+
+**Note:** This reproducer includes timeout handling. In the environment where the bug was observed, Test 2 (3D input) would hang. With the C++ workaround in place, all tests pass.
+
+### 2. `reproduce_with_cuda_meta.py`
+Tests various ways of creating and using meta tensors.
+
+**Usage:**
+```bash
+python repro/reproduce_with_cuda_meta.py
+```
+
+**Tests:**
+- Plain meta tensors
+- Meta tensors with CUDA device context
+- BFloat16 dtype (matches debug output from original bug)
+- Meta tensors with requires_grad=True
+- Different tensor creation methods (torch.randn, torch.empty, etc.)
+
+**Purpose:** Helps identify which specific combination of meta tensor attributes triggers the bug.
 
 ## How to Reproduce
 
@@ -157,26 +157,58 @@ The operation:
 
 ## Testing
 
-Run the reproducers to confirm the bug still exists:
+Run the reproducers to test for the bug:
 
 ```bash
-# Quick test (will hang - press Ctrl+C)
-python reproduce_meta_mm_hang.py
+# Test F.linear with meta tensors (actual use case where hang was observed)
+python repro/reproduce_linear_meta_hang.py
 
-# Test with timeout
-python reproduce_meta_mm_hang_detailed.py
-
-# Comprehensive test suite
-python test_meta_vs_fake_tensor.py
+# Test different meta tensor creation methods and configurations
+python repro/reproduce_with_cuda_meta.py
 ```
+
+## Why Tests May Not Hang
+
+The tests in this directory **do not hang** in vanilla PyTorch builds. This is because:
+
+1. **Workaround is active**: The C++ workaround in `LinearAlgebra.cpp` bypasses `at::mm()` for meta tensors
+2. **Environment-specific**: The original bug only occurred in a specific build configuration
+3. **May be fixed**: The underlying dispatcher issue may have been resolved
+
+The workaround in `aten/src/ATen/native/LinearAlgebra.cpp` (around line 2226):
+```cpp
+if (t1_folded.device().is_meta() && t2->device().is_meta()) {
+  // Manually create output - bypasses the hang
+  auto M = t1_folded.size(0);
+  auto N = t2->size(1);
+  mm_result = at::empty({M, N}, t1_folded.options());
+}
+```
+
+### Purpose of These Reproducers
+
+These scripts serve as:
+- **Documentation** of the bug that was observed
+- **Test cases** to verify the workaround works correctly
+- **Regression tests** if the workaround is removed
+- **Reference** for understanding the code paths involved
+
+To actually trigger the hang, you would need to:
+1. Remove the workaround code above
+2. Rebuild PyTorch
+3. Run the tests in the specific environment where the bug occurs
 
 ## Reporting
 
 When reporting this bug to PyTorch:
 
-1. Include output from `reproduce_meta_mm_hang_detailed.py`
+1. Include output from the reproducers (especially `reproduce_linear_meta_hang.py`)
 2. Specify PyTorch version: `python -c "import torch; print(torch.__version__)"`
-3. Include the debug output showing dispatch keys
+3. Include the debug output showing dispatch keys:
+   ```
+   DispatchKeySet(Meta, ADInplaceOrView, AutogradMeta)
+   ```
 4. Mention it's a C++ dispatcher hang, not a Python issue
-5. Note the workaround works (manually creating meta tensor)
+5. Note the workaround works (manually creating meta tensor with correct shape)
+6. Include information about your build configuration if it differs from vanilla PyTorch
 
