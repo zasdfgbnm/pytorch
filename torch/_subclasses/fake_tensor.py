@@ -2130,11 +2130,20 @@ class FakeTensorMode(TorchDispatchMode):
         args: Sequence[object] = (),
         kwargs: Mapping[str, object] = immutable_dict(),
     ) -> object:
+        # Debug print for mm
+        if "mm" in str(func):
+            print(f"[DEBUG FakeTensorMode.dispatch] ENTERED with func={func}", flush=True)
+            print(f"[DEBUG FakeTensorMode.dispatch] args types: {[type(a) for a in args]}", flush=True)
+        
         kwargs = kwargs or {}
         with no_dispatch():
             log.debug("%s %s %s", func, args, kwargs)
+            if "mm" in str(func):
+                print(f"[DEBUG FakeTensorMode.dispatch] After no_dispatch", flush=True)
 
         if func in _DISPATCH_META_HANDLERS:
+            if "mm" in str(func):
+                print(f"[DEBUG FakeTensorMode.dispatch] func in _DISPATCH_META_HANDLERS", flush=True)
             return _DISPATCH_META_HANDLERS[func](args)
 
         if log.getEffectiveLevel() <= logging.DEBUG:
@@ -2147,10 +2156,16 @@ class FakeTensorMode(TorchDispatchMode):
         # Some attribute queries that can be serviced directly
         # See Note [is_coalesced is dispatched]
         if func in _DISPATCH_HANDLE_DIRECTLY:
+            if "mm" in str(func):
+                print(f"[DEBUG FakeTensorMode.dispatch] func in _DISPATCH_HANDLE_DIRECTLY", flush=True)
             # NB: no_dispatch is ok here too, this func is very simple
             with in_kernel_invocation_manager(self):
                 return func(*args, **kwargs)
 
+        if "mm" in str(func):
+            print(f"[DEBUG FakeTensorMode.dispatch] cache_enabled={self.cache_enabled}", flush=True)
+            print(f"[DEBUG FakeTensorMode.dispatch] About to call _cached_dispatch_impl or _dispatch_impl", flush=True)
+        
         if self.cache_enabled:
             return self._cached_dispatch_impl(func, types, args, kwargs)
         else:
@@ -2349,9 +2364,18 @@ class FakeTensorMode(TorchDispatchMode):
         args: Sequence[object],
         kwargs: Mapping[str, object],
     ) -> Optional[FakeTensor]:
+        if "mm" in str(func):
+            print(f"[DEBUG FakeTensorMode._dispatch_impl] ENTERED _dispatch_impl with func={func}", flush=True)
+        
         from torch._higher_order_ops.utils import registered_hop_fake_fns
 
+        if "mm" in str(func):
+            print(f"[DEBUG FakeTensorMode._dispatch_impl] About to flatten args", flush=True)
+        
         flat_args, args_spec = pytree.tree_flatten((args, kwargs))
+        
+        if "mm" in str(func):
+            print(f"[DEBUG FakeTensorMode._dispatch_impl] Args flattened, checking for subclasses", flush=True)
 
         # DO NOT PUT LOGIC BEFORE UNRECOGNIZED TYPE CHECKING
         # We must throw NotImplemented in case of unrecognized types to handle subclasses.
@@ -2818,12 +2842,24 @@ class FakeTensorMode(TorchDispatchMode):
         # run kernel registered to meta for func, which include
         # python meta registrations, prims, decomps, and c++ meta fns (structured kernels)
         # It's possible that the kernel will return NotImplementedError
+        if "mm" in str(func):
+            print(f"[DEBUG FakeTensorMode._dispatch_impl] About to call func with in_kernel_invocation_manager", flush=True)
+            print(f"[DEBUG FakeTensorMode._dispatch_impl] func={func}", flush=True)
+        
         try:
             with in_kernel_invocation_manager(self):
+                if "mm" in str(func):
+                    print(f"[DEBUG FakeTensorMode._dispatch_impl] Inside in_kernel_invocation_manager, calling func(*args, **kwargs)", flush=True)
                 r = func(*args, **kwargs)
+                if "mm" in str(func):
+                    print(f"[DEBUG FakeTensorMode._dispatch_impl] func returned successfully! r={type(r)}", flush=True)
         except NotImplementedError as not_implemented_error:
+            if "mm" in str(func):
+                print(f"[DEBUG FakeTensorMode._dispatch_impl] NotImplementedError: {not_implemented_error}", flush=True)
             return maybe_run_unsafe_fallback(not_implemented_error)
-        except Exception:
+        except Exception as e:
+            if "mm" in str(func):
+                print(f"[DEBUG FakeTensorMode._dispatch_impl] Exception: {e}", flush=True)
             log.exception("failed while attempting to run meta for %s", func)
             raise
 
