@@ -2213,13 +2213,34 @@ static Tensor _matmul_impl(
         std::cout.flush();
         
         std::cout << "[DEBUG _matmul_impl] Now calling at::mm..." << std::endl;
+        std::cout << "[DEBUG _matmul_impl] GradMode::is_enabled() = " << at::GradMode::is_enabled() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] Trying with NoGradGuard..." << std::endl;
         std::cout.flush();
         std::cerr << "[DEBUG _matmul_impl] STDERR: Now calling at::mm..." << std::endl;
         std::cerr.flush();
         
-        auto mm_result = at::mm(t1_folded, *t2);
+        at::Tensor mm_result;
         
-        std::cout << "[DEBUG _matmul_impl] at::mm RETURNED!" << std::endl;
+        // Try to manually compute the output shape and create result for Meta device
+        std::cout << "[DEBUG _matmul_impl] Trying manual meta tensor creation..." << std::endl;
+        if (t1_folded.device().is_meta() && t2->device().is_meta()) {
+          std::cout << "[DEBUG _matmul_impl] Both tensors are meta, creating result manually..." << std::endl;
+          auto M = t1_folded.size(0);
+          auto N = t2->size(1);
+          std::cout << "[DEBUG _matmul_impl] Creating meta tensor with shape [" << M << ", " << N << "]" << std::endl;
+          mm_result = at::empty({M, N}, t1_folded.options());
+          std::cout << "[DEBUG _matmul_impl] Created meta result: " << mm_result.sizes() << std::endl;
+        } else {
+          {
+            at::NoGradGuard no_grad;
+            std::cout << "[DEBUG _matmul_impl] Inside NoGradGuard, calling at::mm..." << std::endl;
+            std::cout.flush();
+            mm_result = at::mm(t1_folded, *t2);
+            std::cout << "[DEBUG _matmul_impl] at::mm RETURNED inside NoGradGuard!" << std::endl;
+          }
+        }
+        
+        std::cout << "[DEBUG _matmul_impl] mm operation completed!" << std::endl;
         
         std::cout << "[DEBUG _matmul_impl] should_fold: at::mm() returned!" << std::endl;
         std::cout << "[DEBUG _matmul_impl] should_fold: mm_result shape = " << mm_result.sizes() << std::endl;
