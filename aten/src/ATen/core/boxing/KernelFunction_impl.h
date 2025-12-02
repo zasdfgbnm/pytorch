@@ -89,22 +89,16 @@ inline void KernelFunction::callBoxed(
     const OperatorHandle& opHandle,
     DispatchKeySet dispatchKeySet,
     Stack* stack) const {
-  // Debug for mm operations
-  auto op_name = toString(opHandle.operator_name());
-  bool is_mm = op_name.find("mm") != std::string::npos;
-  if (is_mm) {
-    std::cerr << "[DEBUG KernelFunction::callBoxed] op=" << op_name 
-              << ", dispatchKeySet=" << dispatchKeySet << std::endl;
-    std::cerr << "[DEBUG KernelFunction::callBoxed] About to call boxed_kernel_func_.callBoxed()" << std::endl;
-    std::cerr.flush();
-  }
+  // Debug: Print before/after calling boxed kernel
+  // (Can't access opHandle.operator_name() here due to incomplete type)
+  std::cerr << "[DEBUG KernelFunction::callBoxed] dispatchKeySet=" << dispatchKeySet 
+            << ", calling boxed kernel" << std::endl;
+  std::cerr.flush();
   
   boxed_kernel_func_.callBoxed(opHandle, dispatchKeySet, stack);
   
-  if (is_mm) {
-    std::cerr << "[DEBUG KernelFunction::callBoxed] boxed_kernel_func_.callBoxed() RETURNED" << std::endl;
-    std::cerr.flush();
-  }
+  std::cerr << "[DEBUG KernelFunction::callBoxed] boxed kernel RETURNED" << std::endl;
+  std::cerr.flush();
 }
 
 template <class Return, class... Args>

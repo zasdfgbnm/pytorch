@@ -42,28 +42,20 @@ inline void BoxedKernel::callBoxed(
     const OperatorHandle& opHandle,
     DispatchKeySet dispatchKeySet,
     Stack* stack) const {
-  // Debug for mm operations
-  auto op_name = toString(opHandle.operator_name());
-  bool is_mm = op_name.find("mm") != std::string::npos;
-  if (is_mm) {
-    std::cerr << "[DEBUG BoxedKernel::callBoxed] op=" << op_name 
-              << ", dispatchKeySet=" << dispatchKeySet << std::endl;
-    std::cerr << "[DEBUG BoxedKernel::callBoxed] boxed_kernel_func_=" << (void*)boxed_kernel_func_ 
-              << ", functor_=" << functor_.get() << std::endl;
-    std::cerr << "[DEBUG BoxedKernel::callBoxed] About to invoke (*boxed_kernel_func_)(...)" << std::endl;
-    std::cerr.flush();
-  }
-  
   TORCH_INTERNAL_ASSERT_DEBUG_ONLY(
       boxed_kernel_func_ != nullptr,
       "Tried to call BoxedKernel::callBoxed() on an uninitialized BoxedKernel.");
   
+  // Debug: Print before calling the kernel function pointer
+  // (Can't access opHandle.operator_name() here due to incomplete type)
+  std::cerr << "[DEBUG BoxedKernel::callBoxed] dispatchKeySet=" << dispatchKeySet 
+            << ", about to invoke kernel func" << std::endl;
+  std::cerr.flush();
+  
   (*boxed_kernel_func_)(functor_.get(), opHandle, dispatchKeySet, stack);
   
-  if (is_mm) {
-    std::cerr << "[DEBUG BoxedKernel::callBoxed] (*boxed_kernel_func_)() RETURNED!" << std::endl;
-    std::cerr.flush();
-  }
+  std::cerr << "[DEBUG BoxedKernel::callBoxed] kernel func RETURNED" << std::endl;
+  std::cerr.flush();
 }
 
 template <BoxedKernel::BoxedKernelFunction* func>
