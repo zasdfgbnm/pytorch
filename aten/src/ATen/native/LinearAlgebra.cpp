@@ -2223,7 +2223,7 @@ static Tensor _matmul_impl(
         
         // Try to manually compute the output shape and create result for Meta device
         std::cout << "[DEBUG _matmul_impl] Trying manual meta tensor creation..." << std::endl;
-        if (t1_folded.device().is_meta() && t2->device().is_meta()) {
+        if (false && t1_folded.device().is_meta() && t2->device().is_meta()) {
           std::cout << "[DEBUG _matmul_impl] Both tensors are meta, creating result manually..." << std::endl;
           auto M = t1_folded.size(0);
           auto N = t2->size(1);
@@ -2251,7 +2251,7 @@ static Tensor _matmul_impl(
         std::cerr.flush();
         
         at::Tensor output;
-        if (mm_result.device().is_meta()) {
+        if (false && mm_result.device().is_meta()) {
           std::cout << "[DEBUG _matmul_impl] should_fold: mm_result is meta, using reshape instead of _unsafe_view..." << std::endl;
           output = mm_result.reshape(output_shape);
           std::cout << "[DEBUG _matmul_impl] should_fold: reshape completed!" << std::endl;
