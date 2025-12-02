@@ -925,6 +925,15 @@ inline void Dispatcher::redispatchBoxed(
   // note: this doesn't need the mutex because write operations on the list keep
   // iterators intact.
   const auto& entry = op.operatorDef_->op;
+  
+  // Debug for mm operations
+  bool is_mm = toString(op.operator_name()).find("mm") != std::string::npos;
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::redispatchBoxed] op=" << toString(op.operator_name()) 
+              << ", dispatchKeySet=" << dispatchKeySet << std::endl;
+    std::cerr.flush();
+  }
+  
 #if defined(HAS_TORCH_SHOW_DISPATCH_TRACE) || !defined(NDEBUG)
   DispatchTraceNestingGuard debug_guard;
   if (show_dispatch_trace()) {
@@ -932,8 +941,25 @@ inline void Dispatcher::redispatchBoxed(
         "[redispatchBoxed]", toString(op.operator_name()), dispatchKeySet);
   }
 #endif
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::redispatchBoxed] About to call entry.lookup()" << std::endl;
+    std::cerr.flush();
+  }
+  
   const auto& kernel = entry.lookup(dispatchKeySet);
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::redispatchBoxed] lookup() returned, about to call kernel.callBoxed()" << std::endl;
+    std::cerr.flush();
+  }
+  
   kernel.callBoxed(op, dispatchKeySet, stack);
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::redispatchBoxed] kernel.callBoxed() RETURNED" << std::endl;
+    std::cerr.flush();
+  }
 }
 
 } // namespace c10

@@ -5,6 +5,13 @@ This directory contains test scripts documenting a bug where `at::mm()` hangs wh
 ## Quick Start
 
 ```bash
+# Test with full dispatcher tracing (RECOMMENDED)
+export TORCH_SHOW_DISPATCH_TRACE=1
+python repro/test_with_dispatch_trace.py
+
+# Or use the shell script
+./repro/test_hang_with_full_trace.sh
+
 # Test F.linear with meta tensors (actual use case)
 python repro/reproduce_linear_meta_hang.py
 
@@ -12,12 +19,31 @@ python repro/reproduce_linear_meta_hang.py
 python repro/reproduce_with_cuda_meta.py
 ```
 
+## Important: Reproducing the Hang
+
+**The workarounds have been REMOVED** to allow the bug to reproduce:
+- ✅ Removed `NoGradGuard` wrapper around `at::mm` call
+- ✅ Removed manual meta tensor creation workaround
+- ✅ Added comprehensive debug prints throughout dispatch path
+
+If the bug exists in your environment, the tests should now hang!
+
 ## Files
 
-- **`reproduce_linear_meta_hang.py`** - Tests `F.linear` with meta tensors (matches actual use case where hang was observed)
-- **`reproduce_with_cuda_meta.py`** - Tests various meta tensor creation methods and dtypes
-- **`REPRODUCE_META_HANG_BUG.md`** - Complete bug documentation and analysis
+### Test Scripts
+- **`test_with_dispatch_trace.py`** - Test with built-in `TORCH_SHOW_DISPATCH_TRACE` enabled
+- **`test_hang_with_full_trace.sh`** - Shell script that runs test with full tracing
+- **`reproduce_linear_meta_hang.py`** - Tests `F.linear` with meta tensors (actual use case)
+- **`reproduce_with_cuda_meta.py`** - Tests various meta tensor creation methods
+
+### Documentation
+- **`DISPATCHER_TRACE_GUIDE.md`** - **START HERE** - Complete guide to tracing the dispatch path
+- **`REPRODUCE_META_HANG_BUG.md`** - Bug documentation and analysis
 - **`README.md`** - This file
+
+### Modified Source Files  
+- **`aten/src/ATen/native/LinearAlgebra.cpp`** - Added debug prints, removed workarounds
+- **`aten/src/ATen/core/dispatch/Dispatcher.cpp`** - Added extra debug for mm operations
 
 ## Expected Behavior
 

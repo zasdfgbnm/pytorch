@@ -71,6 +71,12 @@ void _print_dispatch_trace(const std::string& label, const std::string& op_name,
   auto nesting_value = dispatch_trace_nesting_value();
   for (int64_t i = 0; i < nesting_value; ++i) std::cerr << ' ';
   std::cerr << label << " op=[" << op_name << "], key=[" << toString(dispatchKeySet.highestPriorityTypeId()) << ']' << std::endl;
+  
+  // Extra debug for mm operations
+  if (op_name.find("mm") != std::string::npos) {
+    std::cerr << "[DEBUG DISPATCHER] Full dispatch key set: " << dispatchKeySet << std::endl;
+    std::cerr.flush();
+  }
 }
 } // namespace detail
 
