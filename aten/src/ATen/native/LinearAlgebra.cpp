@@ -200,14 +200,30 @@ TORCH_META_FUNC(_addmm_activation)(const Tensor& self, const Tensor& mat1, const
 }
 
 TORCH_META_FUNC(mm)(const Tensor & self, const Tensor & mat2) {
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] ========== Entered mm meta function ==========" << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] self shape: " << self.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2 shape: " << mat2.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] self device: " << self.device() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2 device: " << mat2.device() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] self dtype: " << self.dtype() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2 dtype: " << mat2.dtype() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] self.dim(): " << self.dim() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2.dim(): " << mat2.dim() << std::endl;
+  
   TORCH_CHECK(self.dim() == 2, "self must be a matrix");
   TORCH_CHECK(mat2.dim() == 2, "mat2 must be a matrix");
   TORCH_CHECK(
       self.sizes()[1] == mat2.sizes()[0], "mat1 and mat2 shapes cannot be multiplied (",
       self.sizes()[0], "x", self.sizes()[1], " and ", mat2.sizes()[0], "x", mat2.sizes()[1], ")");
 
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] Shape checks passed" << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] Computing output shape: [" 
+            << self.sizes()[0] << ", " << mat2.sizes()[1] << "]" << std::endl;
+  
   auto names = at::namedinference::compute_matmul_outnames(self, mat2);
   set_output_raw_strided(0, {self.sizes()[0], mat2.sizes()[1]}, {}, self.options(), names);
+  
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] Meta function complete - output shape set" << std::endl;
 }
 
 TORCH_META_FUNC(linalg_vector_norm)(const Tensor& self, const Scalar& scalar_ord, OptionalIntArrayRef opt_dim, bool keepdim, std::optional<ScalarType> opt_dtype) {
@@ -334,7 +350,13 @@ static void common_checks_baddbmm_bmm(Meta& meta, const Tensor& batch1, const Te
 }
 
 TORCH_META_FUNC(bmm)(const Tensor& self, const Tensor& mat2) {
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] ========== Entered bmm meta function ==========" << std::endl;
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] self shape: " << self.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] mat2 shape: " << mat2.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] self device: " << self.device() << std::endl;
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] mat2 device: " << mat2.device() << std::endl;
     common_checks_baddbmm_bmm(*this, self, mat2, Scalar(0.0), Scalar(1.0), true);
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] Meta function complete" << std::endl;
 }
 
 TORCH_META_FUNC(baddbmm)(const Tensor& self, const Tensor& batch1, const Tensor& batch2, const Scalar& beta, const Scalar& alpha) {
@@ -1399,6 +1421,18 @@ static inline bool apply_mkldnn_matmul_heur(int64_t m, int64_t k, int64_t n) {
 #endif
 static void addmm_impl_cpu_(
     Tensor &result, const Tensor &self, Tensor m1, Tensor m2, const Scalar& beta, const Scalar& alpha) {
+  std::cout << "[DEBUG addmm_impl_cpu_] ========== Entered addmm_impl_cpu_ ==========" << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] self shape: " << self.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] m1 shape: " << m1.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] m2 shape: " << m2.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] result shape: " << result.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] beta: " << beta << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] alpha: " << alpha << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] self device: " << self.device() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] m1 device: " << m1.device() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] m2 device: " << m2.device() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] result device: " << result.device() << std::endl;
+  
   TORCH_INTERNAL_ASSERT(self.dim() == 2 && m1.dim() == 2 && m2.dim() == 2);
 
   TORCH_CHECK(
@@ -1421,13 +1455,17 @@ static void addmm_impl_cpu_(
   at::native::resize_output(result, self_sizes);
   const auto result_strides = result.strides();
   const auto result_sizes = result.sizes();
+  std::cout << "[DEBUG addmm_impl_cpu_] After resize, result shape: " << result.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] result.numel(): " << result.numel() << std::endl;
 
   if (result.numel() == 0) {
+    std::cout << "[DEBUG addmm_impl_cpu_] Early return: result.numel() == 0" << std::endl;
     return;
   }
 
   // Some paths in the code below do not handle multiplications of the form [a, 0] x [0, b]
   if (m1_sizes[1] == 0) {
+    std::cout << "[DEBUG addmm_impl_cpu_] Early return: m1_sizes[1] == 0" << std::endl;
     if (beta.toComplexDouble() == 0.0) {
       result.zero_();
     } else {
@@ -1467,6 +1505,8 @@ static void addmm_impl_cpu_(
   const int64_t m = result_sizes[transpose_c ? 1 : 0];
   const int64_t n = result_sizes[transpose_c ? 0 : 1];
   const int64_t k = m1_sizes[transpose_c ? 0 : 1];
+  std::cout << "[DEBUG addmm_impl_cpu_] transpose_c: " << transpose_c << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] GEMM dimensions: m=" << m << ", n=" << n << ", k=" << k << std::endl;
 
   // Cast m1 as matrix a
   bool transpose_a = false;
@@ -1533,6 +1573,9 @@ static void addmm_impl_cpu_(
 
   if(!dispatched) {
     // Apply BLAS routine
+    std::cout << "[DEBUG addmm_impl_cpu_] Calling cpublas::gemm" << std::endl;
+    std::cout << "[DEBUG addmm_impl_cpu_] transpose_a: " << transpose_a << ", transpose_b: " << transpose_b << std::endl;
+    std::cout << "[DEBUG addmm_impl_cpu_] lda: " << lda << ", ldb: " << ldb << ", ldc: " << ldc << std::endl;
     _AT_DISPATCH_ADDMM_TYPES(result.scalar_type(), "addmm_impl_cpu_", [&]{
           using opmath_t = at::opmath_type<scalar_t>;
           at::native::cpublas::gemm(
@@ -1545,11 +1588,16 @@ static void addmm_impl_cpu_(
               beta.to<opmath_t>(),
               c.mutable_data_ptr<scalar_t>(), ldc);
         });
+    std::cout << "[DEBUG addmm_impl_cpu_] cpublas::gemm completed" << std::endl;
+  } else {
+    std::cout << "[DEBUG addmm_impl_cpu_] Used dispatched path (mkldnn_matmul)" << std::endl;
   }
 
   if (!c.is_same(result)) {
+    std::cout << "[DEBUG addmm_impl_cpu_] Copying c to result" << std::endl;
     result.copy_(c);
   }
+  std::cout << "[DEBUG addmm_impl_cpu_] Completed successfully" << std::endl;
 }
 
 static void addbmm_impl_(
@@ -1635,10 +1683,20 @@ TORCH_IMPL_FUNC(addmm_activation_out_cpu)(const Tensor& self, const Tensor& mat1
 }
 
 TORCH_IMPL_FUNC(mm_out_cpu)(const Tensor & self, const Tensor & mat2, const Tensor & result) {
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] ========== Entered mm_out_cpu ==========" << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] self shape: " << self.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] mat2 shape: " << mat2.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] result shape: " << result.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] self device: " << self.device() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] mat2 device: " << mat2.device() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] result device: " << result.device() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] Calling addmm_impl_cpu_..." << std::endl;
   {
     at::NoNamesGuard guard;
     addmm_impl_cpu_(const_cast<Tensor&>(result), result, self, mat2, 0, 1);
   }
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] addmm_impl_cpu_ completed" << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] result shape after: " << result.sizes() << std::endl;
 }
 
 template <typename scalar_t, bool is_bmm>
@@ -1889,6 +1947,14 @@ TORCH_IMPL_FUNC(baddbmm_out_cpu)
 
 TORCH_IMPL_FUNC(bmm_out_cpu)
 (const Tensor & batch1, const Tensor & batch2, const Tensor & result) {
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] ========== Entered bmm_out_cpu ==========" << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] batch1 shape: " << batch1.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] batch2 shape: " << batch2.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] result shape: " << result.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] batch1 device: " << batch1.device() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] batch2 device: " << batch2.device() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] result device: " << result.device() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] Calling bmm_out_or_baddbmm_..." << std::endl;
     {
     NoNamesGuard guard;
     bool result_is_conj = result.is_conj();
@@ -1896,6 +1962,7 @@ TORCH_IMPL_FUNC(bmm_out_cpu)
     bmm_out_or_baddbmm_(result, batch1.resolve_conj(), batch2.resolve_conj(), Scalar(0.0), Scalar(1.0), true);
     conjugate_mutable_input_if_needed(result, result_is_conj);
     }
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] Completed successfully" << std::endl;
 }
 
 Tensor& dot_out(const Tensor& self, const Tensor& other, Tensor& result) {
