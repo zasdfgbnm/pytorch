@@ -200,7 +200,11 @@ TORCH_META_FUNC(_addmm_activation)(const Tensor& self, const Tensor& mat1, const
 }
 
 TORCH_META_FUNC(mm)(const Tensor & self, const Tensor & mat2) {
-  std::cout << "[DEBUG TORCH_META_FUNC(mm)] ========== Entered mm meta function ==========" << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] ========== ENTERED MM META FUNCTION ==========" << std::endl;
+  std::cout.flush();
+  std::cerr << "[DEBUG TORCH_META_FUNC(mm)] ========== ENTERED MM META FUNCTION (stderr) ==========" << std::endl;
+  std::cerr.flush();
+  
   std::cout << "[DEBUG TORCH_META_FUNC(mm)] self shape: " << self.sizes() << std::endl;
   std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2 shape: " << mat2.sizes() << std::endl;
   std::cout << "[DEBUG TORCH_META_FUNC(mm)] self device: " << self.device() << std::endl;
@@ -209,6 +213,7 @@ TORCH_META_FUNC(mm)(const Tensor & self, const Tensor & mat2) {
   std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2 dtype: " << mat2.dtype() << std::endl;
   std::cout << "[DEBUG TORCH_META_FUNC(mm)] self.dim(): " << self.dim() << std::endl;
   std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2.dim(): " << mat2.dim() << std::endl;
+  std::cout.flush();
   
   TORCH_CHECK(self.dim() == 2, "self must be a matrix");
   TORCH_CHECK(mat2.dim() == 2, "mat2 must be a matrix");
@@ -2121,13 +2126,19 @@ static Tensor _matmul_impl(
     return result;
   } else if (dim_tensor1 == 1 && dim_tensor2 == 2) {
     std::cout << "[DEBUG _matmul_impl] Branch: 1D x 2D -> calling mm() with unsqueeze" << std::endl;
+    std::cout << "[DEBUG _matmul_impl] 1D x 2D: tensor1 device = " << tensor1.device() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] 1D x 2D: tensor2 device = " << tensor2.device() << std::endl;
+    std::cout.flush();
     auto result = has_out ? at::mm_out(out, tensor1.unsqueeze(0), tensor2).squeeze_(0)
-                   : tensor1.unsqueeze(0).mm(tensor2).squeeze_(0);
+                   : at::mm(tensor1.unsqueeze(0), tensor2).squeeze_(0);
     std::cout << "[DEBUG _matmul_impl] mm() result shape: " << result.sizes() << std::endl;
     return result;
   } else if (dim_tensor1 == 2 && dim_tensor2 == 2) {
     std::cout << "[DEBUG _matmul_impl] Branch: 2D x 2D -> calling mm()" << std::endl;
-    auto result = has_out ? at::mm_out(out, tensor1, tensor2) : tensor1.mm(tensor2);
+    std::cout << "[DEBUG _matmul_impl] 2D x 2D: tensor1 device = " << tensor1.device() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] 2D x 2D: tensor2 device = " << tensor2.device() << std::endl;
+    std::cout.flush();
+    auto result = has_out ? at::mm_out(out, tensor1, tensor2) : at::mm(tensor1, tensor2);
     std::cout << "[DEBUG _matmul_impl] mm() result shape: " << result.sizes() << std::endl;
     return result;
   } else if (should_fold(tensor1, tensor2, has_out)) {
@@ -2167,10 +2178,38 @@ static Tensor _matmul_impl(
     // It may not be a view if t2->requires_grad(). See should_fold for an explanation
     const auto t1_folded = t1->reshape({folded_dim1, sizes_1.back()});
     std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded shape = " << t1_folded.sizes() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded device = " << t1_folded.device() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded dtype = " << t1_folded.dtype() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded strides = " << t1_folded.strides() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2 shape = " << t2->sizes() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2 device = " << t2->device() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2 dtype = " << t2->dtype() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2 strides = " << t2->strides() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2_is_matrix = " << t2_is_matrix << std::endl;
     if (!has_out) {
       if (t2_is_matrix) {
         std::cout << "[DEBUG _matmul_impl] should_fold: calling mm() (no out)" << std::endl;
-        const auto output = at::_unsafe_view(t1_folded.mm(*t2), output_shape);
+        std::cout << "[DEBUG _matmul_impl] should_fold: About to call t1_folded.mm(*t2)" << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded.dim() = " << t1_folded.dim() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: t2->dim() = " << t2->dim() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded is_contiguous = " << t1_folded.is_contiguous() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: t2 is_contiguous = " << t2->is_contiguous() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: Sizes match: " << t1_folded.sizes()[1] << " vs " << t2->sizes()[0] << std::endl;
+        std::cout.flush();  // Force flush to ensure we see this before any hang
+        std::cerr << "[DEBUG _matmul_impl] !!! About to call .mm() - this is where hang happens !!!" << std::endl;
+        std::cerr.flush();
+        
+        // Try calling at::mm instead of tensor.mm() to see if that helps
+        std::cout << "[DEBUG _matmul_impl] Calling at::mm(t1_folded, *t2) instead..." << std::endl;
+        std::cout.flush();
+        auto mm_result = at::mm(t1_folded, *t2);
+        
+        std::cout << "[DEBUG _matmul_impl] should_fold: at::mm() returned!" << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: mm_result shape = " << mm_result.sizes() << std::endl;
+        
+        const auto output = at::_unsafe_view(mm_result, output_shape);
+        
+        std::cout << "[DEBUG _matmul_impl] should_fold: _unsafe_view completed" << std::endl;
         std::cout << "[DEBUG _matmul_impl] should_fold: output shape = " << output.sizes() << std::endl;
         // This copies if we perform a 2D @ 3D and the first tensor requires_grad
         // See should_fold for why.
