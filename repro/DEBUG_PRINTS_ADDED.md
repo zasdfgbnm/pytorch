@@ -64,46 +64,68 @@ Look for: `[DEBUG _matmul_impl]`, `[DEBUG TORCH_META_FUNC(mm)]`, `[DEBUG TORCH_I
 
 When you run your code, you should see (in order):
 
-1. **Your code calls F.linear or matmul**
-   ```
-   [DEBUG _matmul_impl] About to call at::mm...
-   [DEBUG _matmul_impl] t1_folded.key_set() = DispatchKeySet(...)
-   ```
+### 1. Entry from your code
+```
+[DEBUG _matmul_impl] About to call at::mm WITHOUT NoGradGuard...
+[DEBUG _matmul_impl] t1_folded.key_set() = DispatchKeySet(Meta, ADInplaceOrView, AutogradMeta)
+[DEBUG _matmul_impl] Inside NoGradGuard, calling at::mm...
+```
 
-2. **Dispatcher receives the call**
-   ```
-   [DEBUG Dispatcher::redispatchBoxed] op=aten::mm, dispatchKeySet=...
-   [DEBUG Dispatcher::redispatchBoxed] About to call entry.lookup()
-   ```
+### 2. Dispatcher::call() entry (unboxed path)
+```
+[DEBUG Dispatcher::call] op=aten::mm
+[DEBUG Dispatcher::call] dispatchKeySet=DispatchKeySet(Meta, AutogradMeta)  
+[DEBUG Dispatcher::call] About to call lookup()
+```
 
-3. **Lookup finds the kernel**
-   ```
-   [DEBUG OperatorEntry::lookup] op=aten::mm, keyset=...
-   [DEBUG OperatorEntry::lookup] highest priority key=...
-   [DEBUG OperatorEntry::lookup] dispatch table index=...
-   [DEBUG OperatorEntry::lookup] Returning kernel, about to call it
-   ```
+### 3. First lookup (for AutogradMeta)
+```
+[DEBUG OperatorEntry::lookup] op=aten::mm, keyset=DispatchKeySet(Meta, AutogradMeta)
+[DEBUG OperatorEntry::lookup] highest priority key=AutogradMeta
+[DEBUG OperatorEntry::lookup] dispatch table index=112
+[DEBUG OperatorEntry::lookup] kernel.isValid=1, isValidUnboxed=1
+[DEBUG OperatorEntry::lookup] Returning kernel, about to call it
+```
 
-4. **Kernel is invoked**
-   ```
-   [DEBUG Dispatcher::redispatchBoxed] kernel.callBoxed()
-   ```
+### 4. Dispatcher calls kernel (unboxed)
+```
+[DEBUG Dispatcher::call] lookup() returned
+[DEBUG Dispatcher::call] About to call kernel.call<>() [fast path]
+```
 
-5. **Kernel runs**
-   - If meta device:
-     ```
-     [DEBUG TORCH_META_FUNC(mm)] ========== ENTERED MM META FUNCTION ==========
-     ```
-   - If CPU:
-     ```
-     [DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] ========== Entered mm_out_cpu ==========
-     ```
+### 5. Autograd kernel redispatches (removes AutogradMeta key)
+This calls `Dispatcher::redispatchBoxed()` or similar, which triggers:
 
-6. **Return**
-   ```
-   [DEBUG Dispatcher::redispatchBoxed] kernel.callBoxed() RETURNED
-   [DEBUG _matmul_impl] at::mm RETURNED!
-   ```
+### 6. Second lookup (for Meta)
+```
+[DEBUG OperatorEntry::lookup] op=aten::mm, keyset=DispatchKeySet(Meta)
+[DEBUG OperatorEntry::lookup] highest priority key=Meta
+[DEBUG OperatorEntry::lookup] dispatch table index=16
+[DEBUG OperatorEntry::lookup] kernel.isValid=1, isValidUnboxed=0  ← BOXED ONLY
+[DEBUG OperatorEntry::lookup] Returning kernel, about to call it
+```
+
+### 7. Kernel invocation (boxed path)
+```
+[DEBUG Dispatcher::callBoxed] About to call kernel.callBoxed() [fast path]
+[DEBUG KernelFunction::callBoxed] About to call boxed_kernel_func_.callBoxed()
+[DEBUG BoxedKernel::callBoxed] About to invoke (*boxed_kernel_func_)(...)
+```
+
+### 8. Meta kernel execution
+```
+[DEBUG TORCH_META_FUNC(mm)] ========== ENTERED MM META FUNCTION ==========
+[DEBUG TORCH_META_FUNC(mm)] self shape: ...
+[DEBUG TORCH_META_FUNC(mm)] Meta function complete
+```
+
+### 9. Return path
+```
+[DEBUG BoxedKernel::callBoxed] (*boxed_kernel_func_)() RETURNED!
+[DEBUG KernelFunction::callBoxed] boxed_kernel_func_.callBoxed() RETURNED
+[DEBUG Dispatcher::callBoxed] kernel.callBoxed() RETURNED [fast path]
+[DEBUG _matmul_impl] at::mm RETURNED!
+```
 
 ## If It Hangs
 

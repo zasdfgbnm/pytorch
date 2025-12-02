@@ -89,7 +89,22 @@ inline void KernelFunction::callBoxed(
     const OperatorHandle& opHandle,
     DispatchKeySet dispatchKeySet,
     Stack* stack) const {
+  // Debug for mm operations
+  auto op_name = toString(opHandle.operator_name());
+  bool is_mm = op_name.find("mm") != std::string::npos;
+  if (is_mm) {
+    std::cerr << "[DEBUG KernelFunction::callBoxed] op=" << op_name 
+              << ", dispatchKeySet=" << dispatchKeySet << std::endl;
+    std::cerr << "[DEBUG KernelFunction::callBoxed] About to call boxed_kernel_func_.callBoxed()" << std::endl;
+    std::cerr.flush();
+  }
+  
   boxed_kernel_func_.callBoxed(opHandle, dispatchKeySet, stack);
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG KernelFunction::callBoxed] boxed_kernel_func_.callBoxed() RETURNED" << std::endl;
+    std::cerr.flush();
+  }
 }
 
 template <class Return, class... Args>
@@ -98,6 +113,8 @@ inline Return callUnboxedKernelFunction(
     OperatorKernel* functor,
     DispatchKeySet dispatchKeySet,
     Args&&... args) {
+  // Note: Can't easily add debug here since we don't have opHandle
+  // Debug prints are in KernelFunction::call() instead
   using ActualSignature = Return(OperatorKernel*, DispatchKeySet, Args...);
   ActualSignature* func =
       reinterpret_cast<ActualSignature*>(unboxed_kernel_func);
