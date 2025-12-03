@@ -50,9 +50,6 @@ inline void BoxedKernel::callBoxed(
   std::cerr << "[BoxedKernel] Stack address: " << (void*)stack << std::endl;
   if (stack) {
     std::cerr << "[BoxedKernel] Stack size: " << stack->size() << std::endl;
-    if (!stack->empty()) {
-      std::cerr << "[BoxedKernel] Stack[0] type: " << stack->at(0).tagKind() << std::endl;
-    }
   }
   std::cerr.flush();
   
