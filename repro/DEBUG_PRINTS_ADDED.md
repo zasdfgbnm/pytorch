@@ -108,8 +108,21 @@ This calls `Dispatcher::redispatchBoxed()` or similar, which triggers:
 ### 7. Kernel invocation (boxed path)
 ```
 [DEBUG Dispatcher::callBoxed] About to call kernel.callBoxed() [fast path]
-[DEBUG KernelFunction::callBoxed] About to call boxed_kernel_func_.callBoxed()
-[DEBUG BoxedKernel::callBoxed] About to invoke (*boxed_kernel_func_)(...)
+[DEBUG KernelFunction::callBoxed] dispatchKeySet=..., calling boxed kernel
+
+========== BoxedKernel::callBoxed ENTRY ==========
+[BoxedKernel] dispatchKeySet=DispatchKeySet(Meta)
+[BoxedKernel] Function pointer address: 0x...
+[BoxedKernel] Functor pointer: 0x...
+[BoxedKernel] Stack address: 0x...
+[BoxedKernel] Stack size: 2
+[BoxedKernel] ============================================
+[BoxedKernel] ABOUT TO CALL THE FUNCTION POINTER
+[BoxedKernel] Function signature: void(*)(OperatorKernel*, const OperatorHandle&, DispatchKeySet, Stack*)
+[BoxedKernel] ============================================
+
+[BoxedKernel] >>>>> INVOKING NOW <<<<<
+← IF HANG OCCURS, IT'S INSIDE THE FUNCTION POINTER CALL
 ```
 
 ### 8. Meta kernel execution
