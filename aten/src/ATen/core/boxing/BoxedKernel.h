@@ -3,6 +3,7 @@
 #include <ATen/core/boxing/OperatorKernel.h>
 #include <c10/core/DispatchKeySet.h>
 #include <c10/util/intrusive_ptr.h>
+#include <iostream>
 
 namespace c10 {
 
