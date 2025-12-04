@@ -872,6 +872,11 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
                 )
             )
 
+            # Add debug for mm operations
+            func_name = f.func.name.name.base
+            if "mm" in func_name:
+                sig_body.append(f'std::cerr << "[DEBUG structured_{func_name}] About to call op.meta()" << std::endl; std::cerr.flush();')
+            
             if self.g.out.precomputed:
                 # If this function group has precomputed elements, the meta function
                 # returns a struct containing them which must be saved so that it
@@ -899,6 +904,9 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
                 sig_body.append("(void)precompute;")
             else:
                 sig_body.append(f"op.meta({meta_exprs});")
+            
+            if "mm" in func_name:
+                sig_body.append(f'std::cerr << "[DEBUG structured_{func_name}] op.meta() RETURNED" << std::endl; std::cerr.flush();')
 
             # After running meta, op.outputs_ is guaranteed to be valid;
             # add it to the context
@@ -989,6 +997,22 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
             sig_body.append(f"return {ret_expr};")  # type: ignore[possibly-undefined]  # TODO: audit
 
             sig_body_str = "\n".join(sig_body)
+            
+            # Add debug prints for mm operations
+            func_name = f.func.name.name.base
+            debug_prefix = ""
+            debug_suffix = ""
+            if "mm" in func_name:
+                debug_prefix = f'''
+  std::cerr << "[DEBUG structured_{func_name} wrapper] ===== ENTERED WRAPPER =====" << std::endl;
+  std::cerr << "[DEBUG structured_{func_name} wrapper] Function: {func_name}" << std::endl;
+  std::cerr << "[DEBUG structured_{func_name} wrapper] Creating op instance..." << std::endl;
+  std::cerr.flush();
+'''
+                debug_suffix = f'''
+  std::cerr << "[DEBUG structured_{func_name} wrapper] ===== EXITING WRAPPER =====" << std::endl;
+  std::cerr.flush();
+'''
 
             # For an overview of what this template code looks like, see
             # https://github.com/pytorch/rfcs/pull/9
@@ -1003,8 +1027,8 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
                 )
             }
 
-{sig.defn()} {{
-{sig_body_str}
+{sig.defn()} {{{debug_prefix}
+{sig_body_str}{debug_suffix}
 }}
 """
 
