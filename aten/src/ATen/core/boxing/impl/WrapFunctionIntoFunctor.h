@@ -14,7 +14,24 @@ class WrapFunctionIntoFunctor_<
     final : public c10::OperatorKernel {
  public:
   C10_ALWAYS_INLINE decltype(auto) operator()(Parameters... args) {
-    return (*FuncPtr::func_ptr())(std::forward<Parameters>(args)...);
+    ::std::cerr << "\n========== WrapFunctionIntoFunctor_::operator() ENTRY ==========" << ::std::endl;
+    ::std::cerr << "[FUNCTOR operator()] About to get function pointer from FuncPtr::func_ptr()" << ::std::endl;
+    ::std::cerr.flush();
+    
+    auto* func = FuncPtr::func_ptr();
+    
+    ::std::cerr << "[FUNCTOR operator()] Got function pointer: " << (void*)func << ::std::endl;
+    ::std::cerr << "[FUNCTOR operator()] About to call (*func)(...)" << ::std::endl;
+    ::std::cerr << "[FUNCTOR operator()] >>>>> CALLING FUNCTION POINTER <<<<<" << ::std::endl;
+    ::std::cerr.flush();
+    
+    auto result = (*func)(std::forward<Parameters>(args)...);
+    
+    ::std::cerr << "[FUNCTOR operator()] >>>>> FUNCTION POINTER RETURNED <<<<<" << ::std::endl;
+    ::std::cerr << "========== WrapFunctionIntoFunctor_::operator() EXIT ==========\n" << ::std::endl;
+    ::std::cerr.flush();
+    
+    return result;
   }
 };
 } // namespace detail
