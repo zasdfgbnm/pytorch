@@ -350,6 +350,13 @@ const std::vector<at::Tag>& OperatorEntry::getTags() const {
 }
 
 std::pair<const AnnotatedKernel&, const char*> OperatorEntry::computeDispatchTableEntryWithDebug(const c10::Dispatcher& dispatcher, DispatchKey dispatch_key) const {
+  bool is_mm = name_.name.find("mm") != std::string::npos;
+  if (is_mm) {
+    std::cerr << "[DEBUG OperatorEntry::computeDispatchTableEntryWithDebug] op=" << name_.name 
+              << ", dispatch_key=" << toString(dispatch_key) << std::endl;
+    std::cerr.flush();
+  }
+  
   // [Note] DispatchTable computation
   // dispatchTable contains entries for runtime dispatch keys.
   // For any dispatch key, it'll pick a kernel using the following order:
@@ -386,6 +393,7 @@ std::pair<const AnnotatedKernel&, const char*> OperatorEntry::computeDispatchTab
 
   // 1. Operator registration
   if (auto direct_registration = getKernelForDispatchKey(dispatch_key)) {
+    if (is_mm) std::cerr << "[DEBUG computeDispatchTableEntry] Path 1: direct registration for " << toString(dispatch_key) << std::endl;
     return {*direct_registration, "kernel"};
   }
 
@@ -401,6 +409,7 @@ std::pair<const AnnotatedKernel&, const char*> OperatorEntry::computeDispatchTab
   //     See Note [Undefined in dispatchTable_] for the special handling for Undefined.
   if (dispatch_key == DispatchKey::Undefined || isIncludedInAlias(dispatch_key, DispatchKey::CompositeExplicitAutograd)) {
     if (auto default_backend_registration = getKernelForDispatchKey(DispatchKey::CompositeExplicitAutograd)) {
+      if (is_mm) std::cerr << "[DEBUG computeDispatchTableEntry] Path 2.2: CompositeExplicitAutograd kernel" << std::endl;
       return {*default_backend_registration, "default backend kernel"};
     }
   }
@@ -435,8 +444,10 @@ std::pair<const AnnotatedKernel&, const char*> OperatorEntry::computeDispatchTab
     if (auto math_registration = getKernelForDispatchKey(DispatchKey::CompositeImplicitAutograd)) {
       if (dispatch_key == DispatchKey::AutogradOther
           && hasKernelForAnyDispatchKey(c10::autogradother_backends)) {
+        if (is_mm) std::cerr << "[DEBUG computeDispatchTableEntry] Path 2.3a: ambiguous autogradother" << std::endl;
         return {ambiguousAutogradOtherKernel(), "ambiguous autogradother"};
       } else if (!has_backend_kernel) {
+        if (is_mm) std::cerr << "[DEBUG computeDispatchTableEntry] Path 2.3b: CompositeImplicitAutograd math kernel" << std::endl;
         return {*math_registration, "math kernel"};
       }
     }
@@ -460,13 +471,16 @@ std::pair<const AnnotatedKernel&, const char*> OperatorEntry::computeDispatchTab
   // 3. Backend fallback
   auto dispatch_ix = getDispatchTableIndexForDispatchKey(dispatch_key);
   if (dispatch_ix < 0) {
+    if (is_mm) std::cerr << "[DEBUG computeDispatchTableEntry] Path 3a: backend fallback not registered on mobile" << std::endl;
     return {missingKernel(), "backend fallback not registered on mobile"};
   }
   if (dispatcher.backendFallbackKernels_[dispatch_ix].kernel.isValid()) {
+    if (is_mm) std::cerr << "[DEBUG computeDispatchTableEntry] Path 3b: backend fallback" << std::endl;
     return {dispatcher.backendFallbackKernels_[dispatch_ix], "backend fallback"};
   }
 
   // 4. Default to error
+  if (is_mm) std::cerr << "[DEBUG computeDispatchTableEntry] Path 4: missing kernel!" << std::endl;
   return {missingKernel(), "missing"};
 }
 

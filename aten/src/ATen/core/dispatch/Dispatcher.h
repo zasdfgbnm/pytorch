@@ -776,9 +776,23 @@ template <class Return, class... Args>
 C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
     const TypedOperatorHandle<Return(Args...)>& op,
     Args... args) const {
+  // Debug for mm operations
+  bool is_mm = toString(op.operator_name()).find("mm") != std::string::npos;
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::call] op=" << toString(op.operator_name()) << std::endl;
+    std::cerr.flush();
+  }
+  
   auto dispatchKeySet =
       op.operatorDef_->op.dispatchKeyExtractor()
           .template getDispatchKeySetUnboxed<Args...>(args...);
+          
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::call] dispatchKeySet=" << dispatchKeySet << std::endl;
+    std::cerr << "[DEBUG Dispatcher::call] About to call lookup()" << std::endl;
+    std::cerr.flush();
+  }
+  
 #if defined(HAS_TORCH_SHOW_DISPATCH_TRACE) || !defined(NDEBUG)
   DispatchTraceNestingGuard debug_guard;
   if (show_dispatch_trace()) {
@@ -787,11 +801,20 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
   }
 #endif
   const KernelFunction& kernel = op.operatorDef_->op.lookup(dispatchKeySet);
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::call] lookup() returned" << std::endl;
+    std::cerr.flush();
+  }
 #ifndef PYTORCH_DISABLE_PER_OP_PROFILING
   auto step_callbacks =
       at::getStepCallbacksUnlessEmpty(at::RecordScope::FUNCTION);
   if (C10_UNLIKELY(
           step_callbacks.has_value() && op.operatorDef_->op.isObserved())) {
+    if (is_mm) {
+      std::cerr << "[DEBUG Dispatcher::call] Taking slow path (profiling)" << std::endl;
+      std::cerr.flush();
+    }
     return callWithDispatchKeySlowPath<Return, Args...>(
         op,
         *step_callbacks,
@@ -803,6 +826,10 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
 
 #ifdef FBCODE_CAFFE2
   if (profilingOperatorEvents()) {
+    if (is_mm) {
+      std::cerr << "[DEBUG Dispatcher::call] FBCODE profiling events path" << std::endl;
+      std::cerr.flush();
+    }
     std::vector<void*> argsAddresses = {(void*)(&args)...};
     std::vector<const char*> argsTypes = {(typeid(args).name())...};
     struct FireOpRAII {
@@ -818,13 +845,26 @@ C10_ALWAYS_INLINE_UNLESS_MOBILE Return Dispatcher::call(
       }
       at::RecordFunction::schema_ref_t schema_ref_;
     } event(op.schema(), argsAddresses, argsTypes);
+    if (is_mm) {
+      std::cerr << "[DEBUG Dispatcher::call] About to call kernel.call<>() [FBCODE]" << std::endl;
+      std::cerr.flush();
+    }
     return kernel.template call<Return, Args...>(
         op, dispatchKeySet, std::forward<Args>(args)...);
   } else {
+    if (is_mm) {
+      std::cerr << "[DEBUG Dispatcher::call] About to call kernel.call<>() [FBCODE no events]" << std::endl;
+      std::cerr.flush();
+    }
     return kernel.template call<Return, Args...>(
         op, dispatchKeySet, std::forward<Args>(args)...);
   }
 #else
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::call] About to call kernel.call<>() [fast path]" << std::endl;
+    std::cerr.flush();
+  }
+  
   return kernel.template call<Return, Args...>(
       op, dispatchKeySet, std::forward<Args>(args)...);
 #endif // FBCODE_CAFFE2
@@ -855,8 +895,22 @@ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
   // note: this doesn't need the mutex because write operations on the list keep
   // iterators intact.
   const auto& entry = op.operatorDef_->op;
+  
+  // Debug for mm operations
+  bool is_mm = toString(op.operator_name()).find("mm") != std::string::npos;
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::callBoxed] op=" << toString(op.operator_name()) << std::endl;
+    std::cerr.flush();
+  }
+  
   auto dispatchKeySet =
       entry.dispatchKeyExtractor().getDispatchKeySetBoxed(stack);
+      
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::callBoxed] dispatchKeySet=" << dispatchKeySet << std::endl;
+    std::cerr.flush();
+  }
+  
 #if defined(HAS_TORCH_SHOW_DISPATCH_TRACE) || !defined(NDEBUG)
   DispatchTraceNestingGuard debug_guard;
   if (show_dispatch_trace()) {
@@ -864,11 +918,26 @@ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
         "[callBoxed]", toString(op.operator_name()), dispatchKeySet);
   }
 #endif
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::callBoxed] About to call entry.lookup()" << std::endl;
+    std::cerr.flush();
+  }
+  
   const auto& kernel = entry.lookup(dispatchKeySet);
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::callBoxed] lookup() returned, kernel.isValid=" << kernel.isValid() << std::endl;
+    std::cerr.flush();
+  }
 #ifndef PYTORCH_DISABLE_PER_OP_PROFILING
   auto step_callbacks =
       at::getStepCallbacksUnlessEmpty(at::RecordScope::FUNCTION);
   if (C10_UNLIKELY(step_callbacks.has_value() && entry.isObserved())) {
+    if (is_mm) {
+      std::cerr << "[DEBUG Dispatcher::callBoxed] Taking profiling path" << std::endl;
+      std::cerr.flush();
+    }
     at::RecordFunction guard(std::move(*step_callbacks));
     auto dispatchKey = dispatchKeySet.highestPriorityTypeId();
     auto& schema = op.schema();
@@ -882,8 +951,18 @@ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
               c10::ArrayRef<const c10::IValue>(stack->data(), stack->size()))
         : runRecordFunction(guard, schema_ref, dispatchKey, dispatchKeySet);
 
+    if (is_mm) {
+      std::cerr << "[DEBUG Dispatcher::callBoxed] About to call kernel.callBoxed() [profiling path]" << std::endl;
+      std::cerr.flush();
+    }
+    
     // keeping the guard alive while executing the kernel
     kernel.callBoxed(op, dispatchKeySet, stack);
+
+    if (is_mm) {
+      std::cerr << "[DEBUG Dispatcher::callBoxed] kernel.callBoxed() RETURNED [profiling path]" << std::endl;
+      std::cerr.flush();
+    }
 
     if (C10_UNLIKELY(guard.needsOutputs())) {
       guard.setOutputs(*stack);
@@ -891,7 +970,18 @@ inline void Dispatcher::callBoxed(const OperatorHandle& op, Stack* stack)
     return;
   }
 #endif // PYTORCH_DISABLE_PER_OP_PROFILING
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::callBoxed] About to call kernel.callBoxed() [fast path]" << std::endl;
+    std::cerr.flush();
+  }
+  
   kernel.callBoxed(op, dispatchKeySet, stack);
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::callBoxed] kernel.callBoxed() RETURNED [fast path]" << std::endl;
+    std::cerr.flush();
+  }
 }
 
 // NB: this doesn't count as a "true" dispatcher jump, so no instrumentation
@@ -925,6 +1015,15 @@ inline void Dispatcher::redispatchBoxed(
   // note: this doesn't need the mutex because write operations on the list keep
   // iterators intact.
   const auto& entry = op.operatorDef_->op;
+  
+  // Debug for mm operations
+  bool is_mm = toString(op.operator_name()).find("mm") != std::string::npos;
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::redispatchBoxed] op=" << toString(op.operator_name()) 
+              << ", dispatchKeySet=" << dispatchKeySet << std::endl;
+    std::cerr.flush();
+  }
+  
 #if defined(HAS_TORCH_SHOW_DISPATCH_TRACE) || !defined(NDEBUG)
   DispatchTraceNestingGuard debug_guard;
   if (show_dispatch_trace()) {
@@ -932,8 +1031,25 @@ inline void Dispatcher::redispatchBoxed(
         "[redispatchBoxed]", toString(op.operator_name()), dispatchKeySet);
   }
 #endif
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::redispatchBoxed] About to call entry.lookup()" << std::endl;
+    std::cerr.flush();
+  }
+  
   const auto& kernel = entry.lookup(dispatchKeySet);
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::redispatchBoxed] lookup() returned, about to call kernel.callBoxed()" << std::endl;
+    std::cerr.flush();
+  }
+  
   kernel.callBoxed(op, dispatchKeySet, stack);
+  
+  if (is_mm) {
+    std::cerr << "[DEBUG Dispatcher::redispatchBoxed] kernel.callBoxed() RETURNED" << std::endl;
+    std::cerr.flush();
+  }
 }
 
 } // namespace c10

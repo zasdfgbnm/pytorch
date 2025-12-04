@@ -669,8 +669,25 @@ static C10_NOINLINE c10::TypedOperatorHandle<{name}::schema> create_{name}_typed
 
                 dispatcher_call = method_base
                 method_name = f"{name}::{method_base}"
-
-                fn_body = f"""
+                
+                # Add debug prints for mm operations (use ::std to avoid namespace conflicts)
+                # Only instrument the exact "mm" operator, not all operators containing "mm"
+                is_mm = str(f.func.name.name) == "mm"
+                if is_mm and not is_redispatching_fn:
+                    fn_body = f"""
+    ::std::cerr << "[DEBUG {method_name}] ===== ENTERED =====" << ::std::endl;
+    ::std::cerr << "[DEBUG {method_name}] About to get typed handle and call dispatcher" << ::std::endl;
+    ::std::cerr.flush();
+    static auto op = create_{name}_typed_handle();
+    ::std::cerr << "[DEBUG {method_name}] About to call op.{dispatcher_call}()" << ::std::endl;
+    ::std::cerr.flush();
+    auto&& result = op.{dispatcher_call}({dispatcher_exprs_str});
+    ::std::cerr << "[DEBUG {method_name}] op.{dispatcher_call}() RETURNED" << ::std::endl;
+    ::std::cerr << "[DEBUG {method_name}] ===== EXITING =====" << ::std::endl;
+    ::std::cerr.flush();
+    return result;"""
+                else:
+                    fn_body = f"""
     static auto op = create_{name}_typed_handle();
     return op.{dispatcher_call}({dispatcher_exprs_str});"""
 
@@ -717,7 +734,23 @@ class ComputeFunction:
                 intlike_t = "int64_t"
 
             if Variant.function in f.variants:
-                result += f"""
+                # Add debug prints for mm operations
+                func_name = str(f.func.name.name)
+                if func_name == "mm":
+                    result += f"""
+// aten::{f.func}
+inline {sig.decl()} {{
+    ::std::cerr << "[DEBUG at::mm] ===== ENTERED at::mm() wrapper =====" << ::std::endl;
+    ::std::cerr << "[DEBUG at::mm] About to call at::_ops::mm::call()" << ::std::endl;
+    ::std::cerr.flush();
+    auto&& result = at::_ops::{f.func.name.unambiguous_name()}::call({exprs_str});
+    ::std::cerr << "[DEBUG at::mm] at::_ops::mm::call() RETURNED" << ::std::endl;
+    ::std::cerr << "[DEBUG at::mm] ===== EXITING at::mm() wrapper =====" << ::std::endl;
+    ::std::cerr.flush();
+    return result;
+}}"""
+                else:
+                    result += f"""
 // aten::{f.func}
 inline {sig.decl()} {{
     return at::_ops::{f.func.name.unambiguous_name()}::call({exprs_str});

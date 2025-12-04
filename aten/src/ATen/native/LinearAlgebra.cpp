@@ -26,6 +26,8 @@
 #include <c10/util/env.h>
 #include <c10/util/irange.h>
 #include <variant>
+#include <iostream>
+#include <c10/core/impl/LocalDispatchKeySet.h>
 
 #ifndef AT_PER_OPERATOR_HEADERS
 #include <ATen/Functions.h>
@@ -199,14 +201,35 @@ TORCH_META_FUNC(_addmm_activation)(const Tensor& self, const Tensor& mat1, const
 }
 
 TORCH_META_FUNC(mm)(const Tensor & self, const Tensor & mat2) {
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] ========== ENTERED MM META FUNCTION ==========" << std::endl;
+  std::cout.flush();
+  std::cerr << "[DEBUG TORCH_META_FUNC(mm)] ========== ENTERED MM META FUNCTION (stderr) ==========" << std::endl;
+  std::cerr.flush();
+  
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] self shape: " << self.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2 shape: " << mat2.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] self device: " << self.device() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2 device: " << mat2.device() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] self dtype: " << self.dtype() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2 dtype: " << mat2.dtype() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] self.dim(): " << self.dim() << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] mat2.dim(): " << mat2.dim() << std::endl;
+  std::cout.flush();
+  
   TORCH_CHECK(self.dim() == 2, "self must be a matrix");
   TORCH_CHECK(mat2.dim() == 2, "mat2 must be a matrix");
   TORCH_CHECK(
       self.sizes()[1] == mat2.sizes()[0], "mat1 and mat2 shapes cannot be multiplied (",
       self.sizes()[0], "x", self.sizes()[1], " and ", mat2.sizes()[0], "x", mat2.sizes()[1], ")");
 
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] Shape checks passed" << std::endl;
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] Computing output shape: [" 
+            << self.sizes()[0] << ", " << mat2.sizes()[1] << "]" << std::endl;
+  
   auto names = at::namedinference::compute_matmul_outnames(self, mat2);
   set_output_raw_strided(0, {self.sizes()[0], mat2.sizes()[1]}, {}, self.options(), names);
+  
+  std::cout << "[DEBUG TORCH_META_FUNC(mm)] Meta function complete - output shape set" << std::endl;
 }
 
 TORCH_META_FUNC(linalg_vector_norm)(const Tensor& self, const Scalar& scalar_ord, OptionalIntArrayRef opt_dim, bool keepdim, std::optional<ScalarType> opt_dtype) {
@@ -333,7 +356,13 @@ static void common_checks_baddbmm_bmm(Meta& meta, const Tensor& batch1, const Te
 }
 
 TORCH_META_FUNC(bmm)(const Tensor& self, const Tensor& mat2) {
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] ========== Entered bmm meta function ==========" << std::endl;
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] self shape: " << self.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] mat2 shape: " << mat2.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] self device: " << self.device() << std::endl;
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] mat2 device: " << mat2.device() << std::endl;
     common_checks_baddbmm_bmm(*this, self, mat2, Scalar(0.0), Scalar(1.0), true);
+    std::cout << "[DEBUG TORCH_META_FUNC(bmm)] Meta function complete" << std::endl;
 }
 
 TORCH_META_FUNC(baddbmm)(const Tensor& self, const Tensor& batch1, const Tensor& batch2, const Scalar& beta, const Scalar& alpha) {
@@ -1398,6 +1427,18 @@ static inline bool apply_mkldnn_matmul_heur(int64_t m, int64_t k, int64_t n) {
 #endif
 static void addmm_impl_cpu_(
     Tensor &result, const Tensor &self, Tensor m1, Tensor m2, const Scalar& beta, const Scalar& alpha) {
+  std::cout << "[DEBUG addmm_impl_cpu_] ========== Entered addmm_impl_cpu_ ==========" << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] self shape: " << self.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] m1 shape: " << m1.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] m2 shape: " << m2.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] result shape: " << result.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] beta: " << beta << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] alpha: " << alpha << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] self device: " << self.device() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] m1 device: " << m1.device() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] m2 device: " << m2.device() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] result device: " << result.device() << std::endl;
+  
   TORCH_INTERNAL_ASSERT(self.dim() == 2 && m1.dim() == 2 && m2.dim() == 2);
 
   TORCH_CHECK(
@@ -1420,13 +1461,17 @@ static void addmm_impl_cpu_(
   at::native::resize_output(result, self_sizes);
   const auto result_strides = result.strides();
   const auto result_sizes = result.sizes();
+  std::cout << "[DEBUG addmm_impl_cpu_] After resize, result shape: " << result.sizes() << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] result.numel(): " << result.numel() << std::endl;
 
   if (result.numel() == 0) {
+    std::cout << "[DEBUG addmm_impl_cpu_] Early return: result.numel() == 0" << std::endl;
     return;
   }
 
   // Some paths in the code below do not handle multiplications of the form [a, 0] x [0, b]
   if (m1_sizes[1] == 0) {
+    std::cout << "[DEBUG addmm_impl_cpu_] Early return: m1_sizes[1] == 0" << std::endl;
     if (beta.toComplexDouble() == 0.0) {
       result.zero_();
     } else {
@@ -1466,6 +1511,8 @@ static void addmm_impl_cpu_(
   const int64_t m = result_sizes[transpose_c ? 1 : 0];
   const int64_t n = result_sizes[transpose_c ? 0 : 1];
   const int64_t k = m1_sizes[transpose_c ? 0 : 1];
+  std::cout << "[DEBUG addmm_impl_cpu_] transpose_c: " << transpose_c << std::endl;
+  std::cout << "[DEBUG addmm_impl_cpu_] GEMM dimensions: m=" << m << ", n=" << n << ", k=" << k << std::endl;
 
   // Cast m1 as matrix a
   bool transpose_a = false;
@@ -1532,6 +1579,9 @@ static void addmm_impl_cpu_(
 
   if(!dispatched) {
     // Apply BLAS routine
+    std::cout << "[DEBUG addmm_impl_cpu_] Calling cpublas::gemm" << std::endl;
+    std::cout << "[DEBUG addmm_impl_cpu_] transpose_a: " << transpose_a << ", transpose_b: " << transpose_b << std::endl;
+    std::cout << "[DEBUG addmm_impl_cpu_] lda: " << lda << ", ldb: " << ldb << ", ldc: " << ldc << std::endl;
     _AT_DISPATCH_ADDMM_TYPES(result.scalar_type(), "addmm_impl_cpu_", [&]{
           using opmath_t = at::opmath_type<scalar_t>;
           at::native::cpublas::gemm(
@@ -1544,11 +1594,16 @@ static void addmm_impl_cpu_(
               beta.to<opmath_t>(),
               c.mutable_data_ptr<scalar_t>(), ldc);
         });
+    std::cout << "[DEBUG addmm_impl_cpu_] cpublas::gemm completed" << std::endl;
+  } else {
+    std::cout << "[DEBUG addmm_impl_cpu_] Used dispatched path (mkldnn_matmul)" << std::endl;
   }
 
   if (!c.is_same(result)) {
+    std::cout << "[DEBUG addmm_impl_cpu_] Copying c to result" << std::endl;
     result.copy_(c);
   }
+  std::cout << "[DEBUG addmm_impl_cpu_] Completed successfully" << std::endl;
 }
 
 static void addbmm_impl_(
@@ -1634,10 +1689,20 @@ TORCH_IMPL_FUNC(addmm_activation_out_cpu)(const Tensor& self, const Tensor& mat1
 }
 
 TORCH_IMPL_FUNC(mm_out_cpu)(const Tensor & self, const Tensor & mat2, const Tensor & result) {
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] ========== Entered mm_out_cpu ==========" << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] self shape: " << self.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] mat2 shape: " << mat2.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] result shape: " << result.sizes() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] self device: " << self.device() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] mat2 device: " << mat2.device() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] result device: " << result.device() << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] Calling addmm_impl_cpu_..." << std::endl;
   {
     at::NoNamesGuard guard;
     addmm_impl_cpu_(const_cast<Tensor&>(result), result, self, mat2, 0, 1);
   }
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] addmm_impl_cpu_ completed" << std::endl;
+  std::cout << "[DEBUG TORCH_IMPL_FUNC(mm_out_cpu)] result shape after: " << result.sizes() << std::endl;
 }
 
 template <typename scalar_t, bool is_bmm>
@@ -1888,6 +1953,14 @@ TORCH_IMPL_FUNC(baddbmm_out_cpu)
 
 TORCH_IMPL_FUNC(bmm_out_cpu)
 (const Tensor & batch1, const Tensor & batch2, const Tensor & result) {
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] ========== Entered bmm_out_cpu ==========" << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] batch1 shape: " << batch1.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] batch2 shape: " << batch2.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] result shape: " << result.sizes() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] batch1 device: " << batch1.device() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] batch2 device: " << batch2.device() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] result device: " << result.device() << std::endl;
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] Calling bmm_out_or_baddbmm_..." << std::endl;
     {
     NoNamesGuard guard;
     bool result_is_conj = result.is_conj();
@@ -1895,6 +1968,7 @@ TORCH_IMPL_FUNC(bmm_out_cpu)
     bmm_out_or_baddbmm_(result, batch1.resolve_conj(), batch2.resolve_conj(), Scalar(0.0), Scalar(1.0), true);
     conjugate_mutable_input_if_needed(result, result_is_conj);
     }
+    std::cout << "[DEBUG TORCH_IMPL_FUNC(bmm_out_cpu)] Completed successfully" << std::endl;
 }
 
 Tensor& dot_out(const Tensor& self, const Tensor& other, Tensor& result) {
@@ -2006,9 +2080,20 @@ static Tensor _matmul_impl(
     Tensor& out,
     const Tensor& tensor1,
     const Tensor& tensor2) {
+  std::cout << "[DEBUG _matmul_impl] ========== Entered _matmul_impl ==========" << std::endl;
+  std::cout << "[DEBUG _matmul_impl] tensor1 shape: " << tensor1.sizes() << std::endl;
+  std::cout << "[DEBUG _matmul_impl] tensor2 shape: " << tensor2.sizes() << std::endl;
+  std::cout << "[DEBUG _matmul_impl] tensor1 device: " << tensor1.device() << std::endl;
+  std::cout << "[DEBUG _matmul_impl] tensor2 device: " << tensor2.device() << std::endl;
+  std::cout << "[DEBUG _matmul_impl] tensor1 dtype: " << tensor1.dtype() << std::endl;
+  std::cout << "[DEBUG _matmul_impl] tensor2 dtype: " << tensor2.dtype() << std::endl;
+  
   NoNamesGuard guard;
   const auto dim_tensor1 = tensor1.dim();
   const auto dim_tensor2 = tensor2.dim();
+
+  std::cout << "[DEBUG _matmul_impl] dim_tensor1: " << dim_tensor1 << std::endl;
+  std::cout << "[DEBUG _matmul_impl] dim_tensor2: " << dim_tensor2 << std::endl;
 
   // This is checked up here to simplify the logic below
   // Note that the strings are just evaluated on failure, so almost always we just evaluate
@@ -2019,6 +2104,7 @@ static Tensor _matmul_impl(
 
 
   const bool has_out = out.defined();
+  std::cout << "[DEBUG _matmul_impl] has_out: " << has_out << std::endl;
 
   if (has_out) {
     // Usually we would rely on the out= kernels we decompose into to check this, but
@@ -2030,15 +2116,34 @@ static Tensor _matmul_impl(
   }
 
   if (dim_tensor1 == 1 && dim_tensor2 == 1) {
-    return has_out ? at::dot_out(out, tensor1, tensor2) : tensor1.dot(tensor2);
+    std::cout << "[DEBUG _matmul_impl] Branch: 1D x 1D -> calling dot()" << std::endl;
+    auto result = has_out ? at::dot_out(out, tensor1, tensor2) : tensor1.dot(tensor2);
+    std::cout << "[DEBUG _matmul_impl] dot() result shape: " << result.sizes() << std::endl;
+    return result;
   } else if (dim_tensor1 == 2 && dim_tensor2 == 1) {
-    return has_out ? at::mv_out(out, tensor1, tensor2) : tensor1.mv(tensor2);
+    std::cout << "[DEBUG _matmul_impl] Branch: 2D x 1D -> calling mv()" << std::endl;
+    auto result = has_out ? at::mv_out(out, tensor1, tensor2) : tensor1.mv(tensor2);
+    std::cout << "[DEBUG _matmul_impl] mv() result shape: " << result.sizes() << std::endl;
+    return result;
   } else if (dim_tensor1 == 1 && dim_tensor2 == 2) {
-    return has_out ? at::mm_out(out, tensor1.unsqueeze(0), tensor2).squeeze_(0)
-                   : tensor1.unsqueeze(0).mm(tensor2).squeeze_(0);
+    std::cout << "[DEBUG _matmul_impl] Branch: 1D x 2D -> calling mm() with unsqueeze" << std::endl;
+    std::cout << "[DEBUG _matmul_impl] 1D x 2D: tensor1 device = " << tensor1.device() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] 1D x 2D: tensor2 device = " << tensor2.device() << std::endl;
+    std::cout.flush();
+    auto result = has_out ? at::mm_out(out, tensor1.unsqueeze(0), tensor2).squeeze_(0)
+                   : at::mm(tensor1.unsqueeze(0), tensor2).squeeze_(0);
+    std::cout << "[DEBUG _matmul_impl] mm() result shape: " << result.sizes() << std::endl;
+    return result;
   } else if (dim_tensor1 == 2 && dim_tensor2 == 2) {
-    return has_out ? at::mm_out(out, tensor1, tensor2) : tensor1.mm(tensor2);
+    std::cout << "[DEBUG _matmul_impl] Branch: 2D x 2D -> calling mm()" << std::endl;
+    std::cout << "[DEBUG _matmul_impl] 2D x 2D: tensor1 device = " << tensor1.device() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] 2D x 2D: tensor2 device = " << tensor2.device() << std::endl;
+    std::cout.flush();
+    auto result = has_out ? at::mm_out(out, tensor1, tensor2) : at::mm(tensor1, tensor2);
+    std::cout << "[DEBUG _matmul_impl] mm() result shape: " << result.sizes() << std::endl;
+    return result;
   } else if (should_fold(tensor1, tensor2, has_out)) {
+    std::cout << "[DEBUG _matmul_impl] Branch: should_fold = true" << std::endl;
     // dim_tensor1 >=3 && (dim_tensor2 == 1 || dim_tensor2 == 2) ||
     // dim_tensor2 >=3 && (dim_tensor1 == 1 || dim_tensor1 == 2)
     // and at least one of the following two conditions hold
@@ -2048,6 +2153,7 @@ static Tensor _matmul_impl(
     // optimization: use mm instead of bmm by folding the batch of the larger tensor
     // into its leading matrix dimension
     const auto transpose = dim_tensor2 > dim_tensor1;
+    std::cout << "[DEBUG _matmul_impl] should_fold: transpose = " << transpose << std::endl;
     const auto t1 = transpose ? MaybeOwned<Tensor>::owned(tensor2.mT())
                               : MaybeOwned<Tensor>::borrowed(tensor1);
     const auto t2 = !transpose ? MaybeOwned<Tensor>::borrowed(tensor2)
@@ -2072,39 +2178,134 @@ static Tensor _matmul_impl(
     // This will almost always be a view.
     // It may not be a view if t2->requires_grad(). See should_fold for an explanation
     const auto t1_folded = t1->reshape({folded_dim1, sizes_1.back()});
+    std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded shape = " << t1_folded.sizes() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded device = " << t1_folded.device() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded dtype = " << t1_folded.dtype() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded strides = " << t1_folded.strides() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2 shape = " << t2->sizes() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2 device = " << t2->device() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2 dtype = " << t2->dtype() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2 strides = " << t2->strides() << std::endl;
+    std::cout << "[DEBUG _matmul_impl] should_fold: t2_is_matrix = " << t2_is_matrix << std::endl;
     if (!has_out) {
       if (t2_is_matrix) {
-        const auto output = at::_unsafe_view(t1_folded.mm(*t2), output_shape);
+        std::cout << "[DEBUG _matmul_impl] should_fold: calling mm() (no out)" << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: About to call t1_folded.mm(*t2)" << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded.dim() = " << t1_folded.dim() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: t2->dim() = " << t2->dim() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: t1_folded is_contiguous = " << t1_folded.is_contiguous() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: t2 is_contiguous = " << t2->is_contiguous() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: Sizes match: " << t1_folded.sizes()[1] << " vs " << t2->sizes()[0] << std::endl;
+        std::cout.flush();  // Force flush to ensure we see this before any hang
+        std::cerr << "[DEBUG _matmul_impl] !!! About to call .mm() - this is where hang happens !!!" << std::endl;
+        std::cerr.flush();
+        
+        // Try calling at::mm instead of tensor.mm() to see if that helps
+        std::cout << "[DEBUG _matmul_impl] Calling at::mm(t1_folded, *t2) instead..." << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t1_folded.key_set() = " << t1_folded.key_set() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t2->key_set() = " << t2->key_set() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t1_folded.has_storage() = " << t1_folded.has_storage() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t2->has_storage() = " << t2->has_storage() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t1_folded.is_python_dispatch() = " << t1_folded.key_set().has(c10::DispatchKey::Python) << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t2->is_python_dispatch() = " << t2->key_set().has(c10::DispatchKey::Python) << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t1_folded.unsafeGetTensorImpl() = " << t1_folded.unsafeGetTensorImpl() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] t2->unsafeGetTensorImpl() = " << t2->unsafeGetTensorImpl() << std::endl;
+        std::cout.flush();
+        
+        std::cout << "[DEBUG _matmul_impl] Now calling at::mm..." << std::endl;
+        std::cout << "[DEBUG _matmul_impl] GradMode::is_enabled() = " << at::GradMode::is_enabled() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] Trying with NoGradGuard..." << std::endl;
+        std::cout.flush();
+        std::cerr << "[DEBUG _matmul_impl] STDERR: Now calling at::mm..." << std::endl;
+        std::cerr.flush();
+        
+        at::Tensor mm_result;
+        
+        // Try to manually compute the output shape and create result for Meta device
+        std::cout << "[DEBUG _matmul_impl] Trying manual meta tensor creation..." << std::endl;
+        if (false && t1_folded.device().is_meta() && t2->device().is_meta()) {
+          std::cout << "[DEBUG _matmul_impl] Both tensors are meta, creating result manually..." << std::endl;
+          auto M = t1_folded.size(0);
+          auto N = t2->size(1);
+          std::cout << "[DEBUG _matmul_impl] Creating meta tensor with shape [" << M << ", " << N << "]" << std::endl;
+          mm_result = at::empty({M, N}, t1_folded.options());
+          std::cout << "[DEBUG _matmul_impl] Created meta result: " << mm_result.sizes() << std::endl;
+        } else {
+          {
+            at::NoGradGuard no_grad;
+            std::cout << "[DEBUG _matmul_impl] Inside NoGradGuard, calling at::mm..." << std::endl;
+            std::cout.flush();
+            mm_result = at::mm(t1_folded, *t2);
+            std::cout << "[DEBUG _matmul_impl] at::mm RETURNED inside NoGradGuard!" << std::endl;
+          }
+        }
+        
+        std::cout << "[DEBUG _matmul_impl] mm operation completed!" << std::endl;
+        
+        std::cout << "[DEBUG _matmul_impl] should_fold: at::mm() returned!" << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: mm_result shape = " << mm_result.sizes() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: output_shape = " << output_shape << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: About to call at::_unsafe_view..." << std::endl;
+        std::cout.flush();
+        std::cerr << "[DEBUG _matmul_impl] STDERR: About to call at::_unsafe_view..." << std::endl;
+        std::cerr.flush();
+        
+        at::Tensor output;
+        if (false && mm_result.device().is_meta()) {
+          std::cout << "[DEBUG _matmul_impl] should_fold: mm_result is meta, using reshape instead of _unsafe_view..." << std::endl;
+          output = mm_result.reshape(output_shape);
+          std::cout << "[DEBUG _matmul_impl] should_fold: reshape completed!" << std::endl;
+        } else {
+          output = at::_unsafe_view(mm_result, output_shape);
+          std::cout << "[DEBUG _matmul_impl] should_fold: _unsafe_view completed!" << std::endl;
+        }
+        
+        std::cout << "[DEBUG _matmul_impl] should_fold: view/reshape done!" << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: output shape = " << output.sizes() << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: transpose = " << transpose << std::endl;
+        std::cout << "[DEBUG _matmul_impl] should_fold: About to return..." << std::endl;
+        std::cout.flush();
         // This copies if we perform a 2D @ 3D and the first tensor requires_grad
         // See should_fold for why.
         // If mm_out were differentiable, we could use it here, and pass a result with the
         // correct strides to avoid this unnecessary copy.
-        return transpose ? output.mT().contiguous() : output;
+        auto result = transpose ? output.mT().contiguous() : output;
+        std::cout << "[DEBUG _matmul_impl] should_fold: Returning result with shape = " << result.sizes() << std::endl;
+        return result;
       } else {
-        return at::_unsafe_view(t1_folded.mv(*t2), output_shape);
+        std::cout << "[DEBUG _matmul_impl] should_fold: calling mv() (no out)" << std::endl;
+        auto result = at::_unsafe_view(t1_folded.mv(*t2), output_shape);
+        std::cout << "[DEBUG _matmul_impl] should_fold: result shape = " << result.sizes() << std::endl;
+        return result;
       }
     } else {
+      std::cout << "[DEBUG _matmul_impl] should_fold: has_out = true" << std::endl;
       // See the !has_out branch for an explanation
       TORCH_INTERNAL_ASSERT(!(transpose && t2_is_matrix));
 
       // Resize output into the correct shape
       at::native::resize_output(out, output_shape);
+      std::cout << "[DEBUG _matmul_impl] should_fold: resized out shape = " << out.sizes() << std::endl;
 
       // We then reshape the output to the expected shape and call mm/mv
       // and transpose back if necessary
       auto reshaped_out = t2_is_matrix ? out.reshape({folded_dim1, t2->sizes().back()})
                                        : out.reshape({folded_dim1});
       if (t2_is_matrix) {
+        std::cout << "[DEBUG _matmul_impl] should_fold: calling mm_out()" << std::endl;
         at::mm_out(reshaped_out, t1_folded, *t2);
       } else {
+        std::cout << "[DEBUG _matmul_impl] should_fold: calling mv_out()" << std::endl;
         at::mv_out(reshaped_out, t1_folded, *t2);
       }
       if (!reshaped_out.is_alias_of(out)) {
         out.copy_(reshaped_out);
       }
+      std::cout << "[DEBUG _matmul_impl] should_fold: final out shape = " << out.sizes() << std::endl;
       return out;
     }
   } else {
+    std::cout << "[DEBUG _matmul_impl] Branch: batched matmul (dim >= 3)" << std::endl;
     // dim_tensor1 >= 3 || dim_tensor2 >= 3
     // We track m1 vs m2 separately even though they must match for nicer error messages
     const int64_t n = dim_tensor1 > 1 ? tensor1.sizes().cend()[-2] : 1LL;
@@ -2114,20 +2315,24 @@ static Tensor _matmul_impl(
     const int64_t p = dim_tensor2 > 1 ? tensor2.sizes().back() : 1LL;
     const IntArrayRef batch_tensor2(tensor2.sizes().data(),
                                     std::max<int64_t>(dim_tensor2 - 2, 0LL));
+    std::cout << "[DEBUG _matmul_impl] batched: n=" << n << ", m1=" << m1 << ", m2=" << m2 << ", p=" << p << std::endl;
 
     // Same optimization for the gradients as that in should_fold
     // If we're going to broadcast we force it to go through the should_fold branch
     if (dim_tensor1 == 3 && dim_tensor2 == 3 && batch_tensor1[0] != batch_tensor2[0]) {
       if (batch_tensor1[0] == 1 && (tensor1.requires_grad() || isTensorSubclassLike(tensor1))) {
+        std::cout << "[DEBUG _matmul_impl] batched: recursive call - squeezing tensor1" << std::endl;
         return _matmul_impl(out, tensor1.squeeze(0), tensor2);
       }
       if (batch_tensor2[0] == 1 && (tensor2.requires_grad() || isTensorSubclassLike(tensor2))) {
+        std::cout << "[DEBUG _matmul_impl] batched: recursive call - squeezing tensor2" << std::endl;
         return _matmul_impl(out, tensor1, tensor2.squeeze(0));
       }
     }
 
     auto output_shape = infer_size_dimvector(batch_tensor1, batch_tensor2);
     const int64_t expand_batch_product = c10::multiply_integers(output_shape);
+    std::cout << "[DEBUG _matmul_impl] batched: expand_batch_product = " << expand_batch_product << std::endl;
 
     // flatten expanded batches
     const auto tensor1_expand_size = [&output_shape, n, m1]{ DimVector ret(output_shape);
@@ -2135,6 +2340,7 @@ static Tensor _matmul_impl(
                                                              return ret; }();
     const auto tensor1_expanded = tensor1.expand(tensor1_expand_size)
                                          .reshape({expand_batch_product, n, m1});
+    std::cout << "[DEBUG _matmul_impl] batched: tensor1_expanded shape = " << tensor1_expanded.sizes() << std::endl;
     // We need to treat the dim_tensor2 == 1 case separately as broadcasting would not convert
     // a vector of shape (n,) into a batch of matrices of shape (*, n, 1)
     auto vector_rhs = dim_tensor2 == 1;
@@ -2150,8 +2356,10 @@ static Tensor _matmul_impl(
     auto tensor2_expanded = tensor2.expand(tensor2_expand_size);
     if (vector_rhs) {
       tensor2_expanded = tensor2_expanded.reshape({expand_batch_product, m2}).unsqueeze(2);
+      std::cout << "[DEBUG _matmul_impl] batched: vector_rhs=true, tensor2_expanded shape = " << tensor2_expanded.sizes() << std::endl;
     } else {
       tensor2_expanded = tensor2_expanded.reshape({expand_batch_product, m2, p});
+      std::cout << "[DEBUG _matmul_impl] batched: vector_rhs=false, tensor2_expanded shape = " << tensor2_expanded.sizes() << std::endl;
     }
 
     if (dim_tensor1 > 1) {
@@ -2162,12 +2370,18 @@ static Tensor _matmul_impl(
     }
 
     if (!has_out) {
+      std::cout << "[DEBUG _matmul_impl] batched: calling bmm() (no out)" << std::endl;
       if (vector_rhs) {
-        return at::_unsafe_view(tensor1_expanded.bmm(tensor2_expanded).squeeze(-1), output_shape);
+        auto result = at::_unsafe_view(tensor1_expanded.bmm(tensor2_expanded).squeeze(-1), output_shape);
+        std::cout << "[DEBUG _matmul_impl] batched: result shape (vector_rhs) = " << result.sizes() << std::endl;
+        return result;
       } else {
-        return at::_unsafe_view(tensor1_expanded.bmm(tensor2_expanded), output_shape);
+        auto result = at::_unsafe_view(tensor1_expanded.bmm(tensor2_expanded), output_shape);
+        std::cout << "[DEBUG _matmul_impl] batched: result shape = " << result.sizes() << std::endl;
+        return result;
       }
     } else {
+      std::cout << "[DEBUG _matmul_impl] batched: calling bmm_out()" << std::endl;
       at::native::resize_output(out, output_shape);
       auto reshaped_out = out.reshape({expand_batch_product, n, p});
       at::bmm_out(reshaped_out, tensor1_expanded, tensor2_expanded);
@@ -2177,32 +2391,57 @@ static Tensor _matmul_impl(
       if (!reshaped_out.is_alias_of(out)) {
         out.copy_(reshaped_out.view_as(out));
       }
+      std::cout << "[DEBUG _matmul_impl] batched: final out shape = " << out.sizes() << std::endl;
       return out;
     }
   }
 }
 
 Tensor matmul(const Tensor & tensor1, const Tensor & tensor2) {
+  std::cout << "[DEBUG matmul] ========== Entered matmul() ==========" << std::endl;
+  std::cout << "[DEBUG matmul] tensor1 shape: " << tensor1.sizes() << std::endl;
+  std::cout << "[DEBUG matmul] tensor2 shape: " << tensor2.sizes() << std::endl;
+  std::cout << "[DEBUG matmul] tensor1 device: " << tensor1.device() << std::endl;
+  std::cout << "[DEBUG matmul] tensor2 device: " << tensor2.device() << std::endl;
+  std::cout << "[DEBUG matmul] tensor1 dtype: " << tensor1.dtype() << std::endl;
+  std::cout << "[DEBUG matmul] tensor2 dtype: " << tensor2.dtype() << std::endl;
+  
   auto maybe_outnames = namedinference::compute_matmul_outnames(tensor1, tensor2);
   at::Tensor result, unused;
+  std::cout << "[DEBUG matmul] Calling _matmul_impl()..." << std::endl;
   result = at::native::_matmul_impl(unused, tensor1, tensor2);
+  std::cout << "[DEBUG matmul] _matmul_impl() returned, result shape: " << result.sizes() << std::endl;
   namedinference::propagate_names_if_nonempty(result, maybe_outnames);
+  std::cout << "[DEBUG matmul] Returning result" << std::endl;
   return result;
 }
 
 Tensor& matmul_out(const Tensor & tensor1, const Tensor & tensor2, Tensor &result) {
+  std::cout << "[DEBUG matmul_out] ========== Entered matmul_out() ==========" << std::endl;
+  std::cout << "[DEBUG matmul_out] tensor1 shape: " << tensor1.sizes() << std::endl;
+  std::cout << "[DEBUG matmul_out] tensor2 shape: " << tensor2.sizes() << std::endl;
+  std::cout << "[DEBUG matmul_out] tensor1 device: " << tensor1.device() << std::endl;
+  std::cout << "[DEBUG matmul_out] tensor2 device: " << tensor2.device() << std::endl;
+  std::cout << "[DEBUG matmul_out] result shape (before): " << result.sizes() << std::endl;
+  std::cout << "[DEBUG matmul_out] result device: " << result.device() << std::endl;
+  
   auto maybe_outnames = namedinference::compute_matmul_outnames(tensor1, tensor2);
+  std::cout << "[DEBUG matmul_out] Calling _matmul_impl()..." << std::endl;
   at::native::_matmul_impl(result, tensor1, tensor2);
+  std::cout << "[DEBUG matmul_out] _matmul_impl() returned, result shape (after): " << result.sizes() << std::endl;
   namedinference::propagate_names_if_nonempty(result, maybe_outnames);
+  std::cout << "[DEBUG matmul_out] Returning result" << std::endl;
   return result;
 }
 
 // torch.linalg.matmul, alias for torch.matmul
 Tensor linalg_matmul(const Tensor & tensor1, const Tensor & tensor2) {
+  std::cout << "[DEBUG linalg_matmul] Called, forwarding to matmul()" << std::endl;
   return at::matmul(tensor1, tensor2);
 }
 
 Tensor& linalg_matmul_out(const Tensor & tensor1, const Tensor & tensor2, Tensor &result) {
+  std::cout << "[DEBUG linalg_matmul_out] Called, forwarding to matmul_out()" << std::endl;
   return at::matmul_out(result, tensor1, tensor2);
 }
 

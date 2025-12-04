@@ -42,10 +42,51 @@ inline void BoxedKernel::callBoxed(
     const OperatorHandle& opHandle,
     DispatchKeySet dispatchKeySet,
     Stack* stack) const {
+  std::cerr << "\n========== BoxedKernel::callBoxed ENTRY ==========" << std::endl;
+  std::cerr << "[BoxedKernel] dispatchKeySet=" << dispatchKeySet << std::endl;
+  std::cerr << "[BoxedKernel] Function pointer address: " << (void*)boxed_kernel_func_ << std::endl;
+  std::cerr << "[BoxedKernel] Functor pointer: " << (void*)functor_.get() << std::endl;
+  std::cerr << "[BoxedKernel] OperatorHandle address: " << (void*)&opHandle << std::endl;
+  std::cerr << "[BoxedKernel] Stack address: " << (void*)stack << std::endl;
+  if (stack) {
+    std::cerr << "[BoxedKernel] Stack size: " << stack->size() << std::endl;
+  }
+  std::cerr.flush();
+  
   TORCH_INTERNAL_ASSERT_DEBUG_ONLY(
       boxed_kernel_func_ != nullptr,
       "Tried to call BoxedKernel::callBoxed() on an uninitialized BoxedKernel.");
-  (*boxed_kernel_func_)(functor_.get(), opHandle, dispatchKeySet, stack);
+  
+  std::cerr << "\n[BoxedKernel] ============================================" << std::endl;
+  std::cerr << "[BoxedKernel] ABOUT TO CALL THE FUNCTION POINTER" << std::endl;
+  std::cerr << "[BoxedKernel] Function signature: void(*)(OperatorKernel*, const OperatorHandle&, DispatchKeySet, Stack*)" << std::endl;
+  std::cerr << "[BoxedKernel] If hang occurs, it's inside this call:" << std::endl;
+  std::cerr << "[BoxedKernel]   (*boxed_kernel_func_)(functor, opHandle, dispatchKeySet, stack)" << std::endl;
+  std::cerr << "[BoxedKernel] ============================================\n" << std::endl;
+  std::cerr.flush();
+  
+  // Try-catch to see if exception is thrown
+  try {
+    std::cerr << "[BoxedKernel] >>>>> INVOKING NOW <<<<<" << std::endl;
+    std::cerr.flush();
+    
+    (*boxed_kernel_func_)(functor_.get(), opHandle, dispatchKeySet, stack);
+    
+    std::cerr << "[BoxedKernel] >>>>> RETURNED SUCCESSFULLY <<<<<" << std::endl;
+    std::cerr.flush();
+  } catch (const std::exception& e) {
+    std::cerr << "[BoxedKernel] >>>>> EXCEPTION CAUGHT: " << e.what() << " <<<<<" << std::endl;
+    std::cerr.flush();
+    throw;
+  } catch (...) {
+    std::cerr << "[BoxedKernel] >>>>> UNKNOWN EXCEPTION CAUGHT <<<<<" << std::endl;
+    std::cerr.flush();
+    throw;
+  }
+  
+  std::cerr << "[BoxedKernel] Function call completed successfully!" << std::endl;
+  std::cerr << "========== BoxedKernel::callBoxed EXIT ==========\n" << std::endl;
+  std::cerr.flush();
 }
 
 template <BoxedKernel::BoxedKernelFunction* func>
@@ -92,7 +133,48 @@ inline BoxedKernel BoxedKernel::makeFromFunctor(
          const OperatorHandle& op,
          DispatchKeySet ks,
          Stack* stack) {
-        (*static_cast<KernelFunctor*>(kernel))(op, ks, stack);
+        // Use helper function defined in .cpp where OperatorHandle is complete
+        bool is_mm = is_mm_operator(op);
+        
+        if (is_mm) {
+          std::cerr << "\n[BoxedKernel LAMBDA] ===== ENTERED makeFromFunctor LAMBDA =====" << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] DispatchKeySet: " << ks << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] Kernel pointer: " << (void*)kernel << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] Stack pointer: " << (void*)stack << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] About to cast to KernelFunctor* and call operator()" << std::endl;
+          std::cerr.flush();
+        }
+        
+        try {
+          if (is_mm) {
+            std::cerr << "[BoxedKernel LAMBDA] >>>>> Calling functor operator() <<<<<" << std::endl;
+            std::cerr.flush();
+          }
+          
+          (*static_cast<KernelFunctor*>(kernel))(op, ks, stack);
+          
+          if (is_mm) {
+            std::cerr << "[BoxedKernel LAMBDA] >>>>> Functor operator() RETURNED <<<<<" << std::endl;
+            std::cerr.flush();
+          }
+        } catch (const std::exception& e) {
+          if (is_mm) {
+            std::cerr << "[BoxedKernel LAMBDA] >>>>> EXCEPTION: " << e.what() << " <<<<<" << std::endl;
+            std::cerr.flush();
+          }
+          throw;
+        } catch (...) {
+          if (is_mm) {
+            std::cerr << "[BoxedKernel LAMBDA] >>>>> UNKNOWN EXCEPTION <<<<<" << std::endl;
+            std::cerr.flush();
+          }
+          throw;
+        }
+        
+        if (is_mm) {
+          std::cerr << "[BoxedKernel LAMBDA] ===== EXITING makeFromFunctor LAMBDA =====" << std::endl;
+          std::cerr.flush();
+        }
       });
 }
 

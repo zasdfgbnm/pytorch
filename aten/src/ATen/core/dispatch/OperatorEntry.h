@@ -180,11 +180,32 @@ class TORCH_API OperatorEntry final {
   [[noreturn]] void reportError(DispatchKey dispatchKey) const;
 
   const KernelFunction& lookup(DispatchKeySet ks) const {
+    // Debug print for mm operations
+    bool is_mm = name_.name.find("mm") != std::string::npos;
+    if (is_mm) {
+      std::cerr << "[DEBUG OperatorEntry::lookup] op=" << name_.name << ", keyset=" << ks << std::endl;
+      std::cerr << "[DEBUG OperatorEntry::lookup] highest priority key=" << toString(ks.highestPriorityTypeId()) << std::endl;
+      std::cerr.flush();
+    }
+    
     const auto idx = ks.getDispatchTableIndexForDispatchKeySet();
+    if (is_mm) {
+      std::cerr << "[DEBUG OperatorEntry::lookup] dispatch table index=" << idx << std::endl;
+      std::cerr.flush();
+    }
+    
     if (C10_UNLIKELY(idx == -1)) {
+      if (is_mm) std::cerr << "[DEBUG OperatorEntry::lookup] ERROR: idx == -1, calling reportError" << std::endl;
       reportError(ks.highestPriorityTypeId());
     }
     const auto& kernel = dispatchTable_[idx];
+    
+    if (is_mm) {
+      std::cerr << "[DEBUG OperatorEntry::lookup] kernel.isValid=" << kernel.isValid() 
+                << ", isValidUnboxed=" << kernel.isValidUnboxed() << std::endl;
+      std::cerr.flush();
+    }
+    
     // A valid kernel *always* has a boxed kernel and *may* have an
     // unboxed kernel. However, we typically do unboxed calls in at::
     // APIs, where the kernel 1) will very likely be valid and 2)
@@ -193,9 +214,16 @@ class TORCH_API OperatorEntry final {
     // in the common case.
     if (C10_UNLIKELY(!kernel.isValidUnboxed())) {
       if (!kernel.isValid()) {
+        if (is_mm) std::cerr << "[DEBUG OperatorEntry::lookup] ERROR: kernel not valid, calling reportError" << std::endl;
         reportError(ks.highestPriorityTypeId());
       }
     }
+    
+    if (is_mm) {
+      std::cerr << "[DEBUG OperatorEntry::lookup] Returning kernel, about to call it" << std::endl;
+      std::cerr.flush();
+    }
+    
     return kernel;
   }
 

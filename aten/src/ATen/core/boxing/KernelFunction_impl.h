@@ -89,7 +89,16 @@ inline void KernelFunction::callBoxed(
     const OperatorHandle& opHandle,
     DispatchKeySet dispatchKeySet,
     Stack* stack) const {
+  // Debug: Print before/after calling boxed kernel
+  // (Can't access opHandle.operator_name() here due to incomplete type)
+  std::cerr << "[DEBUG KernelFunction::callBoxed] dispatchKeySet=" << dispatchKeySet 
+            << ", calling boxed kernel" << std::endl;
+  std::cerr.flush();
+  
   boxed_kernel_func_.callBoxed(opHandle, dispatchKeySet, stack);
+  
+  std::cerr << "[DEBUG KernelFunction::callBoxed] boxed kernel RETURNED" << std::endl;
+  std::cerr.flush();
 }
 
 template <class Return, class... Args>
@@ -98,6 +107,8 @@ inline Return callUnboxedKernelFunction(
     OperatorKernel* functor,
     DispatchKeySet dispatchKeySet,
     Args&&... args) {
+  // Note: Can't easily add debug here since we don't have opHandle
+  // Debug prints are in KernelFunction::call() instead
   using ActualSignature = Return(OperatorKernel*, DispatchKeySet, Args...);
   ActualSignature* func =
       reinterpret_cast<ActualSignature*>(unboxed_kernel_func);

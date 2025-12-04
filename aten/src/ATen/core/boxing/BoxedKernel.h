@@ -3,6 +3,7 @@
 #include <ATen/core/boxing/OperatorKernel.h>
 #include <c10/core/DispatchKeySet.h>
 #include <c10/util/intrusive_ptr.h>
+#include <iostream>
 
 namespace c10 {
 
@@ -11,6 +12,10 @@ using Stack = std::vector<IValue>;
 
 class OperatorHandle;
 class KernelFunction;
+
+// Helper function to check if an operator is mm-related (for debug prints)
+// Defined in BoxedKernel.cpp where OperatorHandle is complete
+TORCH_API bool is_mm_operator(const OperatorHandle& op);
 
 // This kernel implements the behavior of falling through to the next available
 // registered dispatch key.  The implementation of this function is FAST; it is

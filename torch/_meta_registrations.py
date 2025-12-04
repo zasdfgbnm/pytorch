@@ -2265,14 +2265,25 @@ def meta__fused_moving_avg_obs_fq_helper(
 @register_meta(aten.mm)
 @out_wrapper(exact_dtype=True)
 def meta_mm(a, b, out_dtype: Optional[torch.dtype] = None):
+    print("[DEBUG Python meta_mm] ========== ENTERED PYTHON meta_mm ==========", flush=True)
+    print(f"[DEBUG Python meta_mm] a.shape: {a.shape}, a.device: {a.device}, a.dtype: {a.dtype}", flush=True)
+    print(f"[DEBUG Python meta_mm] b.shape: {b.shape}, b.device: {b.device}, b.dtype: {b.dtype}", flush=True)
+    print(f"[DEBUG Python meta_mm] out_dtype: {out_dtype}", flush=True)
+    
     torch._check(a.dim() == 2, lambda: "a must be 2D")
     torch._check(b.dim() == 2, lambda: "b must be 2D")
+    print("[DEBUG Python meta_mm] Dimension checks passed", flush=True)
+    
     N, M1 = a.shape
     M2, P = b.shape
+    print(f"[DEBUG Python meta_mm] N={N}, M1={M1}, M2={M2}, P={P}", flush=True)
+    
     torch._check(
         M1 == M2,
         lambda: f"a and b must have same reduction dim, but got [{N}, {M1}] X [{M2}, {P}].",
     )
+    print("[DEBUG Python meta_mm] Reduction dim check passed", flush=True)
+    
     if out_dtype is not None:
         torch._check(
             out_dtype == a.dtype
@@ -2283,7 +2294,14 @@ def meta_mm(a, b, out_dtype: Optional[torch.dtype] = None):
             lambda: "out_dtype must be the same as input dtype or fp32 for fp16/bf16 inputs",
         )
     result_dtype = a.dtype if out_dtype is None else out_dtype
-    return a.new_empty((N, P), dtype=result_dtype)
+    print(f"[DEBUG Python meta_mm] result_dtype={result_dtype}", flush=True)
+    print(f"[DEBUG Python meta_mm] About to call a.new_empty(({N}, {P}), dtype={result_dtype})", flush=True)
+    
+    result = a.new_empty((N, P), dtype=result_dtype)
+    
+    print(f"[DEBUG Python meta_mm] new_empty returned, result.shape: {result.shape}", flush=True)
+    print("[DEBUG Python meta_mm] Returning result", flush=True)
+    return result
 
 
 def _compute_reduction_shape(self, dims, keepdim):
