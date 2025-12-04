@@ -734,7 +734,23 @@ class ComputeFunction:
                 intlike_t = "int64_t"
 
             if Variant.function in f.variants:
-                result += f"""
+                # Add debug prints for mm operations
+                func_name = str(f.func.name.name)
+                if func_name == "mm":
+                    result += f"""
+// aten::{f.func}
+inline {sig.decl()} {{
+    ::std::cerr << "[DEBUG at::mm] ===== ENTERED at::mm() wrapper =====" << ::std::endl;
+    ::std::cerr << "[DEBUG at::mm] About to call at::_ops::mm::call()" << ::std::endl;
+    ::std::cerr.flush();
+    auto&& result = at::_ops::{f.func.name.unambiguous_name()}::call({exprs_str});
+    ::std::cerr << "[DEBUG at::mm] at::_ops::mm::call() RETURNED" << ::std::endl;
+    ::std::cerr << "[DEBUG at::mm] ===== EXITING at::mm() wrapper =====" << ::std::endl;
+    ::std::cerr.flush();
+    return result;
+}}"""
+                else:
+                    result += f"""
 // aten::{f.func}
 inline {sig.decl()} {{
     return at::_ops::{f.func.name.unambiguous_name()}::call({exprs_str});
