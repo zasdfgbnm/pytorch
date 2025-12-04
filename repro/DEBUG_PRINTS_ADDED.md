@@ -243,3 +243,23 @@ if (is_mm) {
 
 So they only affect mm-related operations.
 
+## Latest Addition: BoxedKernel Lambda Instrumentation
+
+Added comprehensive debug prints inside the `makeFromFunctor()` lambda in `BoxedKernel_impl.h`. This lambda is the actual function pointer that gets called for structured kernels like `mm`.
+
+**What it does:**
+- The lambda receives the kernel functor pointer, casts it to the correct type, and calls its `operator()`
+- For `mm`, the functor is the auto-generated wrapper for the structured kernel
+
+**Prints added:**
+```
+[BoxedKernel LAMBDA] ===== ENTERED makeFromFunctor LAMBDA =====
+[BoxedKernel LAMBDA] DispatchKeySet: ...
+[BoxedKernel LAMBDA] About to cast to KernelFunctor* and call operator()
+[BoxedKernel LAMBDA] >>>>> Calling functor operator() <<<<<
+← IF HANG OCCURS HERE, IT'S IN THE FUNCTOR'S operator()
+[BoxedKernel LAMBDA] >>>>> Functor operator() RETURNED <<<<<
+```
+
+This is the **deepest level** of instrumentation before entering the actual kernel code (like `TORCH_META_FUNC(mm)`).
+

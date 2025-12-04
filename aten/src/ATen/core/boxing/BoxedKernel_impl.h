@@ -133,7 +133,50 @@ inline BoxedKernel BoxedKernel::makeFromFunctor(
          const OperatorHandle& op,
          DispatchKeySet ks,
          Stack* stack) {
-        (*static_cast<KernelFunctor*>(kernel))(op, ks, stack);
+        // Only print debug info for mm-related operations
+        auto op_name_str = toString(op.operator_name());
+        bool is_mm = op_name_str.find("mm") != std::string::npos;
+        
+        if (is_mm) {
+          std::cerr << "\n[BoxedKernel LAMBDA] ===== ENTERED makeFromFunctor LAMBDA =====" << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] Operator: " << op_name_str << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] DispatchKeySet: " << ks << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] Kernel pointer: " << (void*)kernel << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] Stack pointer: " << (void*)stack << std::endl;
+          std::cerr << "[BoxedKernel LAMBDA] About to cast to KernelFunctor* and call operator()" << std::endl;
+          std::cerr.flush();
+        }
+        
+        try {
+          if (is_mm) {
+            std::cerr << "[BoxedKernel LAMBDA] >>>>> Calling functor operator() <<<<<" << std::endl;
+            std::cerr.flush();
+          }
+          
+          (*static_cast<KernelFunctor*>(kernel))(op, ks, stack);
+          
+          if (is_mm) {
+            std::cerr << "[BoxedKernel LAMBDA] >>>>> Functor operator() RETURNED <<<<<" << std::endl;
+            std::cerr.flush();
+          }
+        } catch (const std::exception& e) {
+          if (is_mm) {
+            std::cerr << "[BoxedKernel LAMBDA] >>>>> EXCEPTION: " << e.what() << " <<<<<" << std::endl;
+            std::cerr.flush();
+          }
+          throw;
+        } catch (...) {
+          if (is_mm) {
+            std::cerr << "[BoxedKernel LAMBDA] >>>>> UNKNOWN EXCEPTION <<<<<" << std::endl;
+            std::cerr.flush();
+          }
+          throw;
+        }
+        
+        if (is_mm) {
+          std::cerr << "[BoxedKernel LAMBDA] ===== EXITING makeFromFunctor LAMBDA =====" << std::endl;
+          std::cerr.flush();
+        }
       });
 }
 
