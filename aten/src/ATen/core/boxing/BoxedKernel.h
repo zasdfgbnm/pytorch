@@ -13,6 +13,10 @@ using Stack = std::vector<IValue>;
 class OperatorHandle;
 class KernelFunction;
 
+// Helper function to check if an operator is mm-related (for debug prints)
+// Defined in BoxedKernel.cpp where OperatorHandle is complete
+TORCH_API bool is_mm_operator(const OperatorHandle& op);
+
 // This kernel implements the behavior of falling through to the next available
 // registered dispatch key.  The implementation of this function is FAST; it is
 // no overhead to fallthrough to the next key.  See cpp file for some more

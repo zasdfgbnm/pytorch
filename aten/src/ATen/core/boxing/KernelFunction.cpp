@@ -5,6 +5,12 @@
 
 namespace c10 {
 
+// Helper function to check if an operator is mm-related (for debug prints)
+bool is_mm_operator(const OperatorHandle& op) {
+  auto op_name_str = toString(op.operator_name());
+  return op_name_str.find("mm") != std::string::npos;
+}
+
 // This a "fake" kernel which doesn't actually do anything.  Instead, it is a
 // distinguished kernel which is special cased by the dispatch table to
 // be handled specially.  Its semantics is that it redispatches to the

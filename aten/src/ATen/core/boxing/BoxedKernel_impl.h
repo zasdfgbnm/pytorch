@@ -133,13 +133,11 @@ inline BoxedKernel BoxedKernel::makeFromFunctor(
          const OperatorHandle& op,
          DispatchKeySet ks,
          Stack* stack) {
-        // Only print debug info for mm-related operations
-        auto op_name_str = toString(op.operator_name());
-        bool is_mm = op_name_str.find("mm") != std::string::npos;
+        // Use helper function defined in .cpp where OperatorHandle is complete
+        bool is_mm = is_mm_operator(op);
         
         if (is_mm) {
           std::cerr << "\n[BoxedKernel LAMBDA] ===== ENTERED makeFromFunctor LAMBDA =====" << std::endl;
-          std::cerr << "[BoxedKernel LAMBDA] Operator: " << op_name_str << std::endl;
           std::cerr << "[BoxedKernel LAMBDA] DispatchKeySet: " << ks << std::endl;
           std::cerr << "[BoxedKernel LAMBDA] Kernel pointer: " << (void*)kernel << std::endl;
           std::cerr << "[BoxedKernel LAMBDA] Stack pointer: " << (void*)stack << std::endl;
