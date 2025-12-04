@@ -744,6 +744,15 @@ struct make_boxed_from_unboxed_functor final {
       const OperatorHandle& /*unused*/,
       DispatchKeySet dispatchKeySet,
       Stack* stack) {
+    ::std::cerr << "\n========== make_boxed_from_unboxed_functor::call ENTRY ==========" << ::std::endl;
+    ::std::cerr << "[DISPATCHER UNPACK] functor=" << (void*)functor << ::std::endl;
+    ::std::cerr << "[DISPATCHER UNPACK] dispatchKeySet=" << dispatchKeySet << ::std::endl;
+    ::std::cerr << "[DISPATCHER UNPACK] stack=" << (void*)stack << ::std::endl;
+    if (stack) {
+      ::std::cerr << "[DISPATCHER UNPACK] stack->size()=" << stack->size() << ::std::endl;
+    }
+    ::std::cerr.flush();
+    
     using ReturnType =
         typename guts::infer_function_traits_t<KernelFunctor>::return_type;
     // We're explicitly filtering out DispatchKeySet from the argument list.
@@ -756,23 +765,52 @@ struct make_boxed_from_unboxed_functor final {
         KernelFunctor>::parameter_types;
     constexpr bool has_outputs = !std::is_same_v<void, ReturnType>;
     constexpr size_t num_inputs = guts::typelist::size<ArgTypes>::value;
+    
+    ::std::cerr << "[DISPATCHER UNPACK] num_inputs=" << num_inputs << ::std::endl;
+    ::std::cerr << "[DISPATCHER UNPACK] has_outputs=" << has_outputs << ::std::endl;
+    ::std::cerr << "[DISPATCHER UNPACK] About to call call_functor_with_args_from_stack (unpacking IValues)" << ::std::endl;
+    ::std::cerr.flush();
+    
     if constexpr (has_outputs) {
       // Decay ReturnType to ReturnType_ so that if a reference gets returned,
       // we actually store it by value and don't get a dangling reference. This
       // is only required because some kernels still return `Tensor&`. [Note:
       // VC++ and 'std': ambiguous symbol]
       using ReturnType_ = ::std::decay_t<ReturnType>;
+      
+      ::std::cerr << "[DISPATCHER UNPACK] >>>>> Calling call_functor_with_args_from_stack <<<<<" << ::std::endl;
+      ::std::cerr.flush();
+      
       ReturnType_ output = call_functor_with_args_from_stack<
           KernelFunctor,
           AllowDeprecatedTypes>(functor, dispatchKeySet, stack);
+      
+      ::std::cerr << "[DISPATCHER UNPACK] call_functor_with_args_from_stack RETURNED" << ::std::endl;
+      ::std::cerr << "[DISPATCHER UNPACK] Dropping " << num_inputs << " inputs from stack" << ::std::endl;
+      ::std::cerr.flush();
+      
       torch::jit::drop(*stack, num_inputs);
       // See note [ VC++ and 'std': ambiguous symbol]
       push_outputs<ReturnType_, AllowDeprecatedTypes>::call(
           ::std::move(output), stack);
+      
+      ::std::cerr << "[DISPATCHER UNPACK] Pushed outputs to stack" << ::std::endl;
+      ::std::cerr << "========== make_boxed_from_unboxed_functor::call EXIT ==========\n" << ::std::endl;
+      ::std::cerr.flush();
     } else {
+      ::std::cerr << "[DISPATCHER UNPACK] >>>>> Calling call_functor_with_args_from_stack (void return) <<<<<" << ::std::endl;
+      ::std::cerr.flush();
+      
       call_functor_with_args_from_stack<KernelFunctor, AllowDeprecatedTypes>(
           functor, dispatchKeySet, stack);
+      
+      ::std::cerr << "[DISPATCHER UNPACK] call_functor_with_args_from_stack RETURNED" << ::std::endl;
+      ::std::cerr.flush();
+      
       torch::jit::drop(*stack, num_inputs);
+      
+      ::std::cerr << "========== make_boxed_from_unboxed_functor::call EXIT ==========\n" << ::std::endl;
+      ::std::cerr.flush();
     }
   }
 };
