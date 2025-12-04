@@ -872,10 +872,10 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
                 )
             )
 
-            # Add debug for mm operations
+            # Add debug for mm operations (use ::std to avoid namespace conflicts)
             func_name = f.func.name.name.base
-            if "mm" in func_name:
-                sig_body.append(f'std::cerr << "[DEBUG structured_{func_name}] About to call op.meta()" << std::endl; std::cerr.flush();')
+            if func_name == "mm":
+                sig_body.append(f'::std::cerr << "[DEBUG structured_{func_name}] About to call op.meta()" << ::std::endl; ::std::cerr.flush();')
             
             if self.g.out.precomputed:
                 # If this function group has precomputed elements, the meta function
@@ -905,8 +905,8 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
             else:
                 sig_body.append(f"op.meta({meta_exprs});")
             
-            if "mm" in func_name:
-                sig_body.append(f'std::cerr << "[DEBUG structured_{func_name}] op.meta() RETURNED" << std::endl; std::cerr.flush();')
+            if func_name == "mm":
+                sig_body.append(f'::std::cerr << "[DEBUG structured_{func_name}] op.meta() RETURNED" << ::std::endl; ::std::cerr.flush();')
 
             # After running meta, op.outputs_ is guaranteed to be valid;
             # add it to the context
@@ -1002,16 +1002,16 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
             func_name = f.func.name.name.base
             debug_prefix = ""
             debug_suffix = ""
-            if "mm" in func_name:
+            if func_name == "mm":
                 debug_prefix = f'''
-  std::cerr << "[DEBUG structured_{func_name} wrapper] ===== ENTERED WRAPPER =====" << std::endl;
-  std::cerr << "[DEBUG structured_{func_name} wrapper] Function: {func_name}" << std::endl;
-  std::cerr << "[DEBUG structured_{func_name} wrapper] Creating op instance..." << std::endl;
-  std::cerr.flush();
+  ::std::cerr << "[DEBUG structured_{func_name} wrapper] ===== ENTERED WRAPPER =====" << ::std::endl;
+  ::std::cerr << "[DEBUG structured_{func_name} wrapper] Function: {func_name}" << ::std::endl;
+  ::std::cerr << "[DEBUG structured_{func_name} wrapper] Creating op instance..." << ::std::endl;
+  ::std::cerr.flush();
 '''
                 debug_suffix = f'''
-  std::cerr << "[DEBUG structured_{func_name} wrapper] ===== EXITING WRAPPER =====" << std::endl;
-  std::cerr.flush();
+  ::std::cerr << "[DEBUG structured_{func_name} wrapper] ===== EXITING WRAPPER =====" << ::std::endl;
+  ::std::cerr.flush();
 '''
 
             # For an overview of what this template code looks like, see

@@ -670,20 +670,21 @@ static C10_NOINLINE c10::TypedOperatorHandle<{name}::schema> create_{name}_typed
                 dispatcher_call = method_base
                 method_name = f"{name}::{method_base}"
                 
-                # Add debug prints for mm operations
-                is_mm = "mm" in str(f.func.name.name)
-                if is_mm:
+                # Add debug prints for mm operations (use ::std to avoid namespace conflicts)
+                # Only instrument the exact "mm" operator, not all operators containing "mm"
+                is_mm = str(f.func.name.name) == "mm"
+                if is_mm and not is_redispatching_fn:
                     fn_body = f"""
-    std::cerr << "[DEBUG {method_name}] ===== ENTERED =====" << std::endl;
-    std::cerr << "[DEBUG {method_name}] About to get typed handle and call dispatcher" << std::endl;
-    std::cerr.flush();
+    ::std::cerr << "[DEBUG {method_name}] ===== ENTERED =====" << ::std::endl;
+    ::std::cerr << "[DEBUG {method_name}] About to get typed handle and call dispatcher" << ::std::endl;
+    ::std::cerr.flush();
     static auto op = create_{name}_typed_handle();
-    std::cerr << "[DEBUG {method_name}] About to call op.{dispatcher_call}()" << std::endl;
-    std::cerr.flush();
-    auto result = op.{dispatcher_call}({dispatcher_exprs_str});
-    std::cerr << "[DEBUG {method_name}] op.{dispatcher_call}() RETURNED" << std::endl;
-    std::cerr << "[DEBUG {method_name}] ===== EXITING =====" << std::endl;
-    std::cerr.flush();
+    ::std::cerr << "[DEBUG {method_name}] About to call op.{dispatcher_call}()" << ::std::endl;
+    ::std::cerr.flush();
+    auto&& result = op.{dispatcher_call}({dispatcher_exprs_str});
+    ::std::cerr << "[DEBUG {method_name}] op.{dispatcher_call}() RETURNED" << ::std::endl;
+    ::std::cerr << "[DEBUG {method_name}] ===== EXITING =====" << ::std::endl;
+    ::std::cerr.flush();
     return result;"""
                 else:
                     fn_body = f"""

@@ -127,6 +127,18 @@ This document explains the complete call path from user code calling `at::mm()` 
 ### Conclusion:
 The hang is occurring **inside the auto-generated functor's `operator()` method**, which is the structured kernel wrapper code generated from `torchgen/dest/register_dispatch_key.py` template.
 
+## Compilation Fixes Applied
+
+### Issue: Namespace Conflicts
+The original implementation used `std::cerr` and `std::endl`, which caused compilation errors when generating code for operators in the `at::_ops::std` namespace (e.g., `_standard_gamma_grad_out`).
+
+### Solution
+Changed all prints to use **fully qualified names**:
+- `std::cerr` → `::std::cerr`
+- `std::endl` → `::std::endl`
+- Also changed to only instrument the exact `mm` operator (`func_name == "mm"`) instead of all operators containing "mm" in their name
+- Used `auto&&` instead of `auto` for result to avoid unnecessary copies and handle reference return types correctly
+
 ## To See the New Prints
 
 You need to:
